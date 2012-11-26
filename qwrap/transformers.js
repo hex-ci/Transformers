@@ -9,7 +9,6 @@ Transformers for QWrap 核心库
  * @author: Hex
  */
 
-
 (function () {
     var TF,
         Transformers = TF = Transformers || {
@@ -17,18 +16,14 @@ Transformers for QWrap 核心库
         'build': '20121125'
     };
 
+    var mix = QW.ObjectH.mix;
+
     // 创建名字空间
     namespace('Helper', TF);
     //namespace('Component', TF);
 
-    QW.provide({
-        TF: TF
-    });
-}());
+    // 一些工具类
 
-
-// 一些工具类
-(function () {
     // 实用工具静态类，包括一些常用例程
     TF.Helper.Utility = {
         baseUrl: function(){
@@ -60,7 +55,7 @@ Transformers for QWrap 核心库
         this.data = object || {};
         return this;
     };
-    Object.mix(TF.Hash.prototype, {
+    mix(TF.Hash.prototype, {
         has: function(key) {
             return this.data[key] != undefined;
         },
@@ -144,12 +139,9 @@ Transformers for QWrap 核心库
             return Object.encodeURIJson(this.data);
         }
     });
-}());
 
 
-// 组件类
-(function () {
-    var mix = QW.ObjectH.mix;
+    // 组件类
 
     var decamelize = function(s) {
         return s.replace(/[A-Z]/g, function(a) {
@@ -157,13 +149,7 @@ Transformers for QWrap 核心库
         }).slice(1);
     };
 
-    // 定义 Component 类，用于加载组件
-    TF.Component = function(options) {
-        mix(this.options, options, true);
-        this.initialize();
-    };
-
-    mix(TF.Component.prototype, {
+    var loadComponent = {
         options: {
             name: 'Default',
             url: '',
@@ -177,8 +163,9 @@ Transformers for QWrap 核心库
             data: '',               // URL 参数
         }
 
-        // 构造函数
-        , initialize: function() {
+        , load: function(options) {
+            mix(this.options, options, true);
+
             //if ($(this.options.renderTo).length == 0 && $(this.options.applyTo).length == 0) return;
 
             this._instance = null;
@@ -329,11 +316,25 @@ Transformers for QWrap 核心库
 
             return true;
         }
-    });
-}());
 
-// 组件管理器
-(function () {
+    };
+
+    TF.load = {
+        component: function(options){
+            loadComponent.load(options);
+        }
+    };
+
+
+    // 定义 Component 类，用于加载组件
+    TF.Component = function(options) {
+        mix(this.options, options, true);
+        this.initialize();
+    };
+
+
+
+    // 组件管理器
     TF.componentMgr = {
         initialize: function() {
             this._length = 0;
@@ -543,6 +544,13 @@ Transformers for QWrap 核心库
     };
 
     TF.componentMgr.initialize();
+
+
+    // 挂载到 QWrap 上
+    QW.provide({
+        TF: TF
+    });
+
 }());
 
 Dom.ready(function(){
