@@ -12,28 +12,44 @@ Transformers for QWrap 核心库
 (function () {
     var TF,
         Transformers = TF = Transformers || {
-        'version': '0.0.1',
+        'version': '0.0.2',
         'build': '20121125'
     };
 
-    var mix = QW.ObjectH.mix;
+    var mix = QW.ObjectH.mix,
+        bind = QW.FunctionH.bind;
 
     // 创建名字空间
+    namespace('Core', TF);
+    namespace('Component', TF);
+    namespace('Library', TF);
     namespace('Helper', TF);
-    //namespace('Component', TF);
+
+    TF.Core.config = {
+        name: '',
+        baseUrl: '/scripts/'
+    };
 
     // 一些工具类
 
     // 实用工具静态类，包括一些常用例程
-    TF.Helper.Utility = {
+    TF.Helper.utility = {
         baseUrl: function(){
-            return '/scripts/';
+            return TF.Core.config.baseUrl;
+        }
+
+        , siteUrl: function(uri){
+            return TF.Core.config.baseUrl + uri;
+        }
+
+        , getApplicationPath: function() {
+            return TF.Core.config.name ? TF.Core.config.name.toLowerCase() + '/' : '';
         }
 
         // 生成随机数字字符串
         , random: function() {
             return ((new Date()).getTime() + Math.floor(Math.random()*9999));
-        },
+        }
 
         , toArray: function (source) {
             if (source === null || source === undefined)
@@ -51,11 +67,11 @@ Transformers for QWrap 核心库
 
     };
 
-    TF.Hash = function() {
+    TF.Library.Hash = function(object) {
         this.data = object || {};
         return this;
     };
-    mix(TF.Hash.prototype, {
+    mix(TF.Library.Hash.prototype, {
         has: function(key) {
             return this.data[key] != undefined;
         },
@@ -73,8 +89,8 @@ Transformers for QWrap 核心库
             return (this.keyOf(value) !== null);
         },
 
-        each: function(fn, bind){
-            Object.map(this.data, fn, bind);
+        each: function(fn, scope){
+            Object.map(this.data, fn, scope);
         },
 
         extend: function(properties){
@@ -145,12 +161,12 @@ Transformers for QWrap 核心库
 
     var decamelize = function(s) {
         return s.replace(/[A-Z]/g, function(a) {
-            return "-" + a.toLowerCase();
+            return '_' + a.toLowerCase();
         }).slice(1);
     };
 
-    var loadComponent = {
-        options: {
+    TF.Library.ComponentLoader = function(options) {
+        this.options = {
             name: 'Default',
             url: '',
             hide: false,            // 是否以隐藏的方式渲染组件
@@ -161,10 +177,14 @@ Transformers for QWrap 核心库
             applyTo: '',            // 直接把某个 DOM 节点变成组件
             contentEl: '',          // 从某个 DOM 节点取得组件的内容
             data: '',               // URL 参数
-        }
-
-        , load: function(options) {
-            mix(this.options, options, true);
+        };
+        mix(this.options, options, true);
+        CustEvent.createEvents(this, ['beforeswitch', 'afterswitch']);
+        return this;
+    };
+    mix(TF.Library.ComponentLoader.prototype, {
+        load: function(options) {
+            mix(this.options, options || {}, true);
 
             //if ($(this.options.renderTo).length == 0 && $(this.options.applyTo).length == 0) return;
 
@@ -173,24 +193,21 @@ Transformers for QWrap 核心库
             this._instanced = false;
             this._refreshing = false;
             this._hidden = this.options.hide;
+            this.fullName = this.options.name;
 
-            this.name = this.options.name;
+            var name = decamelize(this.options.name).split('_');
+            this.channelName = name[0].capitalize();
+            name[0] = '';
+            this.name = name.join('-').camelize().capitalize();
 
-            // 注册到组件管理器
-            TF.componentMgr.register(this.options.name, this);
-
-            if (this.options.skipInit)
-            {
-                this.createInstance();
-            }
-            else if (!this.options.lazyInit)
-            {
-                this.preload();
-            }
+            this.preload();
         }
 
         , preload: function() {
-            var isLoad = (typeof TF.Component[this.name] == 'undefined' ? false : true);
+            // 创建组件所需的名字空间
+            namespace(this.channelName, TF.Component);
+
+            var isLoad = (typeof TF.Component[this.channelName][this.name] == 'undefined' ? false : true);
 
             if (isLoad)
             {
@@ -198,91 +215,126 @@ Transformers for QWrap 核心库
             }
             else
             {
-                loadJs(TF.Helper.Utility.baseUrl() + 'js/components/' + decamelize(this.name) + '.js', function(){
-                    if (typeof TF.Component[this.name] != 'undefined') {
+                loadJs(TF.Helper.utility.baseUrl() + 'resource/js/' + TF.Helper.utility.getApplicationPath() + this.channelName.toLowerCase() + '/components/' + decamelize(this.name) + '.js', bind(function(){
+                    if (typeof TF.Component[this.channelName][this.name] != 'undefined') {
                         // 加载成功
                         this.createInstance();
                     }
                     else {
                         // 加载失败
                         // 应该返回错误，或者记录日志
+                        this.fireEvent('failure', {instance: null, fullName: this.fullName, name: this.name, channelName: this.channelName});
                     }
-                });
+                }, this));
             }
         }
 
         // 创建当前内容的名字空间实例
         , createInstance: function() {
             try {
-                this._instance = new TF.Component[this.name](this.options);
+                this._instance = new TF.Component[this.channelName][this.name](this.options);
             }
             catch(e) {
-                //console.log(e);
             }
 
             // 组件实例化正确才加载内容
             if (this._instance) {
                 this._instanced = true;
 
+                mix(this._instance.options, this.options, true);
+
                 // 实例准备就绪
                 this._instance.InstanceReady(this);
 
-                if (!this.options.lazyRender) {
-                    if (this.options.applyTo) {
-                        //直接渲染
-                        this.loadComplete(W(this.options.applyTo));
-                    }
-                    else if (this.options.contentEl) {
-                        //直接渲染
-                        this.loadComplete(W(this.options.contentEl).cloneNode(true));
-                    }
-                    else {
-                        this.loadContent();
-                    }
-                }
+                this.fire('complete', {instance: this._instance, fullName: this.fullName, name: this.name, channelName: this.channelName});
             }
             else
             {
                 //alert('组件装载出错，请刷新页面。');
-                //this.fireEvent('failure', this);
+                this.fire('failure', {instance: null, fullName: this.fullName, name: this.name, channelName: this.channelName});
             }
         }
 
+    });
+
+
+
+
+    //TF.Component.create = function(){};
+    //TF.Component.load = function(){};
+    //TF.Core.ComponentLoader;
+    //TF.Core.componentMgr;
+    //TF.Core.Window;
+    //TF.Core.windowMgr;
+
+
+    // 组件系统内部方法
+    var sys = {
+        render: function() {
+            //console.log(this);
+            if (!this.options.lazyRender) {
+                if (this.options.applyTo) {
+                    //直接渲染
+                    this.loadComplete(W(this.options.applyTo));
+                }
+                else if (this.options.contentEl) {
+                    //直接渲染
+                    this.loadComplete(W(this.options.contentEl).cloneNode(true));
+                }
+                else {
+                    this.loadContent();
+                }
+            }
+        },
+
         // Ajax 装载组件内容
-        , loadContent: function() {
+        loadContent: function() {
+            if (this.options.url == '')
+            {
+                this.options.url = TF.Helper.utility.getApplicationPath() + this.channelName.toLowerCase() + '/components/' + decamelize(this.name) + '/view';
+            }
+
+            if (this.options.url.indexOf("http://") < 0)
+            {
+                this.options.url = TF.Helper.utility.siteUrl(this.options.url);
+            }
+
             if (!this._loader)
             {
                 this._loader = new QW.Ajax({
                     url: this.options.url,
                     data: this.options.data,
-                    onsucceed: Function.bind(this.loadComplete, this),
-                    onerror: Function.bind(function() {
+                    onsucceed: bind(this.loadComplete, this),
+                    onerror: bind(function() {
                         //this.loadError('4. Ajax Error!');
                     }, this)
                 });
             }
 
             this._loader.send();
-        }
+        },
 
-        , loadComplete: function(response) {
-            var temp, responseTree;
+        loadComplete: function(ajaxEvent) {
+            var response, responseTree;
+
+            response = ajaxEvent.target.requester.responseText;
 
             if (Object.isString(response))
             {
-                var match = response.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-                if (match) response = match[1];
-                temp = Dom.createElement('div');
-                temp.innerHTML = response;
-                responseTree = W(temp.childNodes);
+                responseTree = W(Dom.createElement('div')).html(response).query('.TFComponent');
             }
             else if (Object.isWrap(response))
             {
                 responseTree = response.first();
             }
+            else {
+                // error
+                return;
+            }
+
 
             // 如果没有装载正确，则立即返回
-            if (!this._instance || !response || !responseTree)
+            if (!this._instance || responseTree.length == 0)
             {
                 //alert('组件装载出错，请刷新页面。');
                 //this._loadError('1. Ajax Error!');
@@ -292,258 +344,473 @@ Transformers for QWrap 核心库
             var element = responseTree;
 
             // 存储经过包装的元素
-            this._instance.setTopElement(element);
+            this._instance.sys.setTopElement(element);
 
             // 是否以隐藏的方式渲染组件
             if (this._hidden)
             {
-                this.hide();
+                this._instance.hide();
             }
 
-            if (!this.options.applyTo)
+            // 放入 DOM 树中
+            if (!this._refreshing)
             {
-                if (!this.options.appendRender)
+                if (!this.options.applyTo)
                 {
-                    W(this.options.renderTo).empty();
+                    if (!this.options.appendRender)
+                    {
+                        W(this.options.renderTo).empty();
+                    }
+                    W(this.options.renderTo).appendChild(element);
                 }
-                W(this.options.renderTo).appendChild(element);
             }
 
-            this._instance.DomReady(this);
+            if (this._instance.sys.query('.js-component-error').length == 0)
+            {
+                this._instance.sys.query().attr('data-tf-component', this.fullName);
+
+                // 判断是否是客户端渲染
+                var template = this._instance.sys.query('script[class~=TFTemplate]');
+                var data = this._instance.sys.query('script[class~=TFData]');
+
+                if (template.length > 0 && data.length > 0)
+                {
+                    // 是客户端渲染，执行模板操作
+                    var obj = null;
+                    try {
+                        obj = QW.JSON.parse(data.html());
+                    } catch (e) {}
+                    this._instance.getElement().html(baidu.template(template.html(), {'ComponentData': obj}));
+                }
+
+                if (!this._refreshing)
+                {
+                    // 从 component 实例继承的 options
+                    this._instance.options = this.options;
+                }
+
+                // 自动提取页面中的 options 值
+                var options = this._instance.getElement('[class~=options]');
+                var name, tag;
+                options.forEach(function(e){
+                    name = e.attr('name');
+                    tag = e.attr('tagName').toLowerCase();
+                    if (tag == 'input' || tag == 'textarea')
+                    {
+                        this._instance.options[name] = e.attr('value');
+                    }
+                    else
+                    {
+                        this._instance.options[name] = e.attr('text');
+                    }
+                }, this);
+
+                this.fire('complete', {instance: this._instance, fullName: this.fullName, name: this.name, channelName: this.channelName});
+
+                // 页面全部装载完成！
+                if (this._refreshing)
+                {
+                    this._instance.DomRefreshReady(this);
+                    this.fire('refreshReady', {instance: this._instance, fullName: this.fullName, name: this.name, channelName: this.channelName});
+                }
+                else
+                {
+                    this._instance.DomReady(this);
+                    this.fire('ready', {instance: this._instance, fullName: this.fullName, name: this.name, channelName: this.channelName});
+                }
+            }
+            else
+            {
+                this.fire('failure', {instance: this._instance, fullName: this.fullName, name: this.name, channelName: this.channelName});
+            }
 
             // 渲染完毕
             this._rendered = true;
 
             return true;
-        }
+        },
 
+        query: function(selector) {
+            return this._topElement.query(selector);
+        },
+
+        setTopElement: function(el, prefix) {
+            prefix = prefix || 'transformers_gen';
+            this._topElement = W(el).attr('id', prefix + '_' + TF.Helper.utility.random());
+        },
+        unsetTopElement: function() {
+            if (this._topElement && this._topElement.length > 0)
+            {
+                this._topElement.parentNode().empty();
+                this._topElement = null;
+            }
+        },
+        setName: function(name, realname) {
+            //this._name = T.string.hyphenate(name).replace(/-/g, '_').slice(1);
+            //this._real_name = T.string.hyphenate(realname).replace(/-/g, '_').slice(1);
+        },
+        setAppName: function(name, realname) {
+            //this._channelName = name.toLowerCase();
+            //this._realChannelName = realname.toLowerCase();
+        },
+        // 取自己的组件名，有别名取别名，否则取真名
+        getComponentName: function() {
+            //return T.string.capitalize(this._channelName) + T.string.capitalize(T.string.camelCase(this._name.replace(/_/g, '-')));
+        },
+        setLoadingMsg: function(msg) {
+            //if (this._isLoadingMsg) return;
+            //this._isLoadingMsg = true;
+            //TF.Singleton.page.setLoadingMsg(msg);
+        },
+
+        // 显示组件
+        show: function() {
+            this._topElement.show();
+            this._hidden = false;
+        },
+
+        // 隐藏组件
+        hide: function() {
+            this._topElement.show();
+            this._hidden = true;
+        },
+
+        isHidden: function() {
+            return this._hidden;
+        }
     };
 
-    TF.load = {
-        component: function(options){
-            loadComponent.load(options);
-        }
-    };
+    TF.Component.Default = function(options) {
+        this._name = ''; // 可能是别名，或者是真名，小写字母
+        this._channelName = '';  // 组件 栏目 名称，可能是别名，小写字母
+        this._hidden = false;
+        this.options = {};
+        this.sys = {
+            instance: this
+        };
+        mix(this.sys, TF.Component.Default.prototype.sys);
 
-
-    // 定义 Component 类，用于加载组件
-    TF.Component = function(options) {
         mix(this.options, options, true);
-        this.initialize();
+        this.initialize(options);
+        return this;
     };
+    mix(TF.Component.Default.prototype, {
+        initialize: function(options) {
+            //this._first_load = this.options._needLoading ? true : false;
+            //this._isLoadingMsg = false;
+        },
 
-
+        InstanceReady: function(loader) {
+            // 实例准备就绪
+        },
+        DomReady: function(loader) {
+            // 组件中的 DOM 已经准备就绪
+        },
+        DomRefreshReady: function(loader) {
+            // 组件中的 DOM 已经刷新完毕并准备就绪
+        },
+        DomDestroy: function(loader) {
+            // 组件即将销毁
+        },
+        loadError: function(loader, msg) {
+            // 组件装载出错
+            //alert('Component Error: ' + msg);
+            ComponentObject._loadContent();
+        },
+        // 默认渲染错误回调函数
+        RenderError: function(result) {
+            //window.location = '#';
+            //TF.Singleton.page.unsetLoadingMsg();
+            //TF.Singleton.page.setErrorMsg(result.error);
+            this._loaded();
+        }
+    });
 
     // 组件管理器
-    TF.componentMgr = {
-        initialize: function() {
-            this._length = 0;
+    TF.Core.componentMgr = function(){
+        var length = 0,
             // 组件关联数组，key 为组件名，value 为组件实例
-            this._components = new TF.Hash();
+            components = new TF.Library.Hash(),
             // 事件订阅列表
-            this._subscriptions = new TF.Hash();
+            subscriptions = new TF.Library.Hash(),
             // 预装载数组
-            this._preload = [];
+            preload = [],
             // 预装载时候的 Show 消息数组
-            this._preloadShow = [];
+            preloadShow = [],
             // 后台组件关联数组，key 为组件名，value 为组件创建 Options
-            this._backgroundComponents = new TF.Hash();
+            backgroundComponents = new TF.Library.Hash(),
             // 后台某组件最后收到的消息，key 为组件名，value 为消息体（消息名+消息参数的数组）
-            this._backgroundLastMessage = new TF.Hash();
+            backgroundLastMessage = new TF.Library.Hash(),
             // 是否正在使用进度条装载组件
-            this._isLoading = false;
+            isLoading = false,
             // 已装载的组件名数组
-            this._loadedComponents = [];
-        },
+            loadedComponents = [];
 
-        // 启动组件装载进程，默认为并行装载，暂不支持顺序加载
-        startLoad: function(isSequential) {
-            if (this._isLoading) return;
+        var loadComplete = function(e) {
+            loadedComponents.push(e.fullName);
 
-            this._preload.forEach(function(item) {
-                new TF.Component(item);
-            });
-        },
+            if (components.has(e.fullName)) {
+                components.set(e.fullName, [e.instance]);
+            }
 
-        // 是否进度条还在装载中
-        isLoading: function() {
-            return this._isLoading;
-        },
+            // 判断是否立即渲染，暂时只支持立即渲染
+            console.log(e.instance.sys);
+            e.instance.sys.render();
 
-        // 组件进度条装载完成（前半部分）
-        _completeProgress: function() {
-            window.clearInterval(this._drawTimer);
-            this._drawTimer = null;
+            if (loadedComponents.length >= length)
+            {
+                completeProgress();
+            }
+        };
 
-            this._finishProgress();
-        },
+        // 最终全部完成
+        var completeProgress = function() {
+            //this._complete.call(this, this._length);
 
-        // 进度条最终全部完成
-        _finishProgress: function() {
-            this._isProgress = false;
-
-            window.clearInterval(this._drawTimer);
-            this._drawTimer = null;
-
-            this._complete.call(this, this._length);
-            this._progress = $.empty;
-            this._complete = $.empty;
-            this._timeout = $.empty;
-
-            this._preloadShow.forEach(function(item){
+            preloadShow.forEach(function(item){
                 this.show(item);
-            }, this);
-            this._preloadShow.length = 0;
-        },
+            }, exports);
+            preloadShow.length = 0;
+        };
 
-        // 添加组件到预装载队列，等候顺序装载或者并行装载
-        add: function(object) {
-            if (this._isLoading) return;
+        // 投递事件给控制器实例
+        var postMessage = function(instance, msg, args) {
+            //if (!this._rendered) return;
 
-            var number = 1;
+            //if (!$defined(args)) args = {};
 
-            this._length += number;
-            this._preload.push(object);
+            // before 用于处理消息返回值，表示是否继续传递消息
+            var is_continue = true,
+                funcName = msg.camelize();
 
-            return this;
-        },
-
-        // 注册组件
-        register: function(name, instance) {
-            //this._length++;
-            if (this._components.has(name))
+            if (instance && Object.isFunction(instance[funcName + 'ActionBefore']))
             {
-                // 已存在的实例
-                this._components.get(name).push(instance);
+                is_continue = instance[funcName + 'ActionBefore'].call(instance, args);
             }
-            else
+
+            if (is_continue === false)
             {
-                this._components.set(name, [instance]);
-            }
-        },
-
-        // 删除组件
-        remove: function(name) {
-            if (this._components.has(name))
-            {
-                // 删除已存在的实例
-                this._components.erase(name);
-            }
-        },
-
-        // 投递事件给具体的实例
-        post: function(name, msg, args) {
-            name = TF.Helper.Utility.toArray(name);
-
-            name.forEach(function(item){
-                if (this._components.has(item))
-                {
-                    // 处理事件订阅
-                    if (this._subscriptions.has(item + msg))
-                    {
-                        this._subscriptions.get(item + msg).forEach(function(func) {
-                            // 谁作为 this 需要考虑下
-                            func.apply(func, [args, msg]);
-                        }, this);
-                    }
-
-                    // 传递给组件
-                    this._components.get(item).forEach(function(com) {
-                        com.postMessage(msg, args);
-                    });
-                }
-                else
-                {
-                    // 发送给后台组件
-                    //this._backgroundLastMessage.set(item, [msg, args]);
-                    //this.loadBackgroundComponent(item);
-                }
-            }, this);
-        },
-
-        // 显示当前容器中 name 所指定的组件，并且隐藏此容器中其它组件
-        show: function(name) {
-            if (this._isLoading)
-            {
-                this._preloadShow.push(name);
                 return;
             }
 
-            if (this.has(name))
+            // 系统事件处理
+            switch (msg)
             {
-                var id, el, com_name;
-                this._components.get(name).forEach(function(item) {
-                    el = item.getElement();
-                    if (el)
-                    {
-                        id = el.attr('id');
-                        // 先隐藏除 name 所指定的组件外的其它组件
-                        //alert(el.getParent().getChildren().length);
-                        el.parent().find('.TFComponent').each($.bind(function(com_el){
-                            if (id != com_el.attr('id'))
-                            {
-                                com_name = com_el.retrieve('ComponentName');
-                                if (com_name)
-                                {
-                                    this.post(com_name, 'component_hide');
-                                }
-                            }
-                        }, this));
+                case 'component-render':
+                    instance.sys.render();
+                    break;
 
-                        // 然后显示 name 所指定的组件
-                        com_name = el.retrieve('ComponentName');
-                        if (com_name && item.isHidden())
+                case 'component-refresh':
+                    instance.sys.refresh();
+                    break;
+
+                case 'component-destroy':
+                    instance.sys.destroy();
+                    break;
+
+                case 'component-show':
+                    instance.sys.show();
+                    break;
+
+                case 'component-hide':
+                    instance.sys.hide();
+                    break;
+            }
+
+            // 把消息派发到组件实例中
+            if (instance && Object.isFunction(instance[funcName + 'Action']))
+            {
+                instance[funcName + 'Action'].call(instance, args);
+            }
+        };
+
+
+        var exports = {
+            // 创建组件
+            create: function(data) {
+                var superclass = data.Extends || TF.Component.Default
+
+                delete data['Extends'];
+
+                var component = function(){
+                    // 执行父类构造函数
+                    superclass.apply(this, arguments);
+
+                    if ('initialize' in this) {
+                        this.initialize.apply(this, arguments);
+                    }
+                };
+
+                mix(component.prototype, data);
+
+                return Function.extend(component, superclass);
+            },
+
+            // 启动组件装载进程，并行装载
+            startLoad: function() {
+                if (isLoading) return;
+
+                preload.forEach(function(item) {
+                    var loader = new TF.Library.ComponentLoader(item);
+                    loader.on('complete', bind(loadComplete, this));
+                    loader.load();
+                });
+            },
+
+            // 是否进度条还在装载中
+            isLoading: function() {
+                return isLoading;
+            },
+
+            // 添加组件到预装载队列，等候装载
+            add: function(object) {
+                if (isLoading) return;
+
+                var number = 1;
+
+                length += number;
+                preload.push(object);
+
+                // 注册到组件管理器
+                if (!components.has(object.name)) {
+                    components.set(object.name, []);
+                }
+
+                return this;
+            },
+
+            // 删除组件
+            remove: function(name) {
+                if (components.has(name))
+                {
+                    // 删除已存在的实例
+                    components.erase(name);
+                }
+            },
+
+            // 投递事件给具体的实例
+            post: function(name, msg, args) {
+                name = TF.Helper.utility.toArray(name);
+
+                name.forEach(function(item){
+                    if (components.has(item))
+                    {
+                        // 处理事件订阅
+                        if (subscriptions.has(item + msg))
                         {
-                            this.post(com_name, 'component_show');
+                            subscriptions.get(item + msg).forEach(function(func) {
+                                // 谁作为 this 需要考虑下
+                                func.apply(func, [args, msg]);
+                            }, this);
                         }
+
+                        // 传递给组件
+                        components.get(item).forEach(function(com) {
+                            postMessage(item, msg, args);
+                        });
+                    }
+                    else
+                    {
+                        // 发送给后台组件
+                        //this._backgroundLastMessage.set(item, [msg, args]);
+                        //this.loadBackgroundComponent(item);
                     }
                 }, this);
-            }
-        },
+            },
 
-        has: function(name) {
-            return this._components.has(name) || this._backgroundComponents.has(name);
-        },
+            // 显示当前容器中 name 所指定的组件，并且隐藏此容器中其它组件
+            show: function(name) {
+                if (isLoading)
+                {
+                    preloadShow.push(name);
+                    return;
+                }
 
-        // 取某个名字下的组件实例个数
-        length: function(name) {
-            if (this._components.has(name))
-            {
-                return this._components.get(name).length;
-            }
-            else
-            {
-                return 0;
-            }
-        },
+                if (this.has(name))
+                {
+                    var id, el, comName, comEl;
+                    components.get(name).forEach(function(item) {
+                        el = item.getElement();
+                        if (el.length > 0)
+                        {
+                            id = el.attr('id');
+                            // 先隐藏除 name 所指定的组件外的其它组件
+                            //alert(el.getParent().getChildren().length);
+                            el.parentNode().query('.TFComponent').forEach(function(comEl){
+                                comEl = W(comEl);console.log(id);
+                                if (id != comEl.attr('id'))
+                                {
+                                    comName = comEl.attr('data-tf-component');
 
-        // 以某个函数订阅某个组件的事件
-        subscribe: function(name, msg, fn, bind) {
-            var func = Function.bind(fn, bind || fn);
-            if (this._subscriptions.has(name + msg))
-            {
-                // 已存在的组件订阅
-                this._subscriptions.get(name + msg).push(func);
-            }
-            else
-            {
-                this._subscriptions.set(name + msg, [func]);
-            }
+                                    if (comName)
+                                    {
+                                        this.post(comName, 'component_hide');
+                                    }
+                                }
+                            }, this);
 
-            // 返回 subscription 句柄
-            return {'key': name + msg, 'value': func};
-        },
+                            // 然后显示 name 所指定的组件
+                            comName = el.attr('data-tf-component');
+                            if (comName && item.sys.isHidden())
+                            {
+                                this.post(comName, 'component_show');
+                            }
+                        }
+                    }, this);
+                }
+            },
 
-        // 取消订阅
-        unsubscribe: function(handle) {
-            if (this._subscriptions.has(handle.key))
-            {
-                this._subscriptions.get(handle.key).erase(handle.value);
+            has: function(name) {
+                return components.has(name) || backgroundComponents.has(name);
+            },
+
+            // 取某个名字下的组件实例个数
+            length: function(name) {
+                if (components.has(name))
+                {
+                    return components.get(name).length;
+                }
+                else
+                {
+                    return 0;
+                }
+            },
+
+            // 以某个函数订阅某个组件的事件
+            subscribe: function(name, msg, fn, scope) {
+                var func = bind(fn, scope || fn);
+                if (subscriptions.has(name + msg))
+                {
+                    // 已存在的组件订阅
+                    subscriptions.get(name + msg).push(func);
+                }
+                else
+                {
+                    subscriptions.set(name + msg, [func]);
+                }
+
+                // 返回 subscription 句柄
+                return {'key': name + msg, 'value': func};
+            },
+
+            // 取消订阅
+            unsubscribe: function(handle) {
+                if (subscriptions.has(handle.key))
+                {
+                    subscriptions.get(handle.key).erase(handle.value);
+                }
             }
+        };
+
+        return exports;
+    }();
+
+    TF.Core.application = {
+        create: function(config) {
+            mix(TF.Core.config, config, true);
         }
     };
 
-    TF.componentMgr.initialize();
 
 
     // 挂载到 QWrap 上
@@ -555,8 +822,8 @@ Transformers for QWrap 核心库
 
 Dom.ready(function(){
     // 执行页面默认的装载完成函数
-    if (TF.run != undefined)
+    if (TF.ready != undefined)
     {
-        TF.run();
+        TF.ready();
     }
 });
