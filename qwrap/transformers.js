@@ -197,21 +197,18 @@ Transformers for QWrap 核心库
             if (this.supports) {
                 // The HTML5 way of handling DHTML history...
                 W(window).on('hashchange', function() {
-                    var hash = self.getHash();
-                    if (hash == self.currentHash) {
-                        return;
-                    }
-                    self.fire('hashChanged', {hash: hash});
+                    self.fire('hashChanged', {hash: self.getHash()});
                 });
             }
             else {
                 if (this.useIframe) {
                     this.initializeHistoryIframe();
                 }
+            }
 
-                if (this.options.start) {
-                    this.start();
-                }
+
+            if (this.options.start) {
+                this.start();
             }
 
         },
@@ -239,7 +236,6 @@ Transformers for QWrap 核心库
         },
 
         checkHash: function(){
-            if (this.timeout) return;
             var state = this.getState();
             if (this.state == state) return;
             if (Browser.ie && (this.state !== null)) {
@@ -311,11 +307,6 @@ Transformers for QWrap 核心库
 
             this.state = state;
         },
-
-//        observeTimeout: function() {
-//            if (this.timeout) this.timeout = this.clear(this.timeout);
-//            else this.timeout = setTimeout(bind(this.observeTimeout, this), 200);
-//        },
 
         clear: function(timer) {
             clearTimeout(timer);

@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+<head>
+	<title>demo1</title>
+	<meta charset="utf-8" />
+	<script src="../qwrap/qwrap.js"></script>
+	<script src="../qwrap/transformers.js"></script>
+</head>
+<body>
+<script type="text/javascript">
+var obj = (new TF.Library.LocationHash());
+obj.on('hashChanged', function(e){
+    alert(e.hash);
+});
+obj.start();
+</script>
+</body>
+</html>
