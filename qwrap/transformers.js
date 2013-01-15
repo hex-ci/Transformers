@@ -714,6 +714,7 @@ Transformers for QWrap 核心库
                 }
                 else {
                     // 处理事件委托绑定
+                    this.delegateJsAction();
                     this.delegateEvent(this.instance.bindEvent);
 
                     this.instance.DomReady();
@@ -745,7 +746,7 @@ Transformers for QWrap 核心库
 
         delegateEvent: function(configs){
             var value, test, eventName;
-            for(var key in configs){
+            for (var key in configs) {
                 value = configs[key];
                 test = key.match(/\{(\S+)\}(.+)/);
                 if (test) {
@@ -760,6 +761,13 @@ Transformers for QWrap 核心库
                     this.topElement.delegate(selector, eventName, bind(value, this.instance));
                 }
             }
+        },
+
+        delegateJsAction: function(){
+            this.topElement.delegate('.js-action', 'click', bind(function(e){
+                var action = W(e.target).attr('data-action');
+                this.postMessage(action, {event: e});
+            }, this));
         },
 
         // 创建浏览器历史路由规则
