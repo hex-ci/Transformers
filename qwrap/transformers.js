@@ -1,7 +1,9 @@
 /*
-
-Transformers for QWrap 核心库
-
+*
+* Transformers for QWrap 核心库
+*
+* 为 QWrap 实现一套组件化开发模式
+*
 */
 
 /**
@@ -12,8 +14,8 @@ Transformers for QWrap 核心库
 (function () {
     var TF,
         Transformers = TF = Transformers || {
-        'version': '0.0.2',
-        'build': '20130109'
+        'version': '0.1',
+        'build': '20130115'
     };
 
     var mix = QW.ObjectH.mix,
@@ -25,9 +27,16 @@ Transformers for QWrap 核心库
     namespace('Library', TF);
     namespace('Helper', TF);
 
-    TF.Core.config = {
+    TF.Core.Config = {
         name: '',
-        baseUrl: '/scripts/'
+        baseUrl: '/',
+        templateUriPattern: '{$application}/{$channel}/{$name}/view',
+        jsUriPattern: 'resource/js/{$application}/{$channel}/{$name}.js',
+        dataUriPattern: '{$application}/{$channel}/{$name}/{$uri}',
+        defaultDataUri: 'model',
+        ajaxDataValidation: function(obj){
+            return (obj.errno == 0);
+        }
     };
 
     // 一些工具类
@@ -35,29 +44,54 @@ Transformers for QWrap 核心库
     // 实用工具静态类，包括一些常用例程
     TF.Helper.Utility = {
         baseUrl: function(){
-            return TF.Core.config.baseUrl;
+            return TF.Core.Config.baseUrl;
         }
 
         , siteUrl: function(uri){
-            return TF.Core.config.baseUrl + uri;
+            return TF.Core.Config.baseUrl + uri;
         }
 
         , getApplicationPath: function() {
-            return TF.Core.config.name ? TF.Core.config.name.toLowerCase() + '/' : '';
+            return TF.Core.Config.name ? TF.Core.Config.name.toLowerCase() + '/' : '';
         }
 
         , getComponentUrl: function(uri, channelName, name) {
-            return TF.Helper.Utility.baseUrl() + TF.Helper.Utility.getApplicationPath() + channelName.toLowerCase() + '/components/' + decamelize(name) + '/' + uri;
+            var pattern = TF.Core.Config.dataUriPattern;
+            var str = pattern.tmpl({
+                application: TF.Core.Config.name.toLowerCase(),
+                channel: channelName.toLowerCase(),
+                name: decamelize(name),
+                uri: uri
+            });
+
+            return TF.Helper.Utility.baseUrl() + str;
         }
 
         , getComponentViewUrl: function(channelName, name) {
-            return TF.Helper.Utility.getComponentUrl('view', channelName, name);
+            var pattern = TF.Core.Config.templateUriPattern;
+            var str = pattern.tmpl({
+                application: TF.Core.Config.name.toLowerCase(),
+                channel: channelName.toLowerCase(),
+                name: decamelize(name)
+            });
+
+            return TF.Helper.Utility.baseUrl() + str;
         }
 
         , getComponentJsUrl: function(channelName, name) {
-            return TF.Helper.Utility.baseUrl() + 'resource/js/' + TF.Helper.Utility.getApplicationPath() + channelName.toLowerCase() + '/components/' + decamelize(name) + '.js';
+            var pattern = TF.Core.Config.jsUriPattern;
+            var str = pattern.tmpl({
+                application: TF.Core.Config.name.toLowerCase(),
+                channel: channelName.toLowerCase(),
+                name: decamelize(name)
+            });
+
+            return TF.Helper.Utility.baseUrl() + str;
         }
 
+        , getDefaultDataUri: function() {
+            return TF.Core.Config.defaultDataUri;
+        }
 
         // 生成随机数字字符串
         , random: function() {
@@ -170,9 +204,7 @@ Transformers for QWrap 核心库
     });
 
 
-
-
-
+    // URI hash 管理，主要就是实现 hashchange 事件
     TF.Library.LocationHash = function(options) {
         this.options = {
             blank_page: 'javascript:0',
@@ -181,10 +213,6 @@ Transformers for QWrap 核心库
         this.iframe = null;
         this.handle = false;
         this.useIframe = (Browser.ie && (typeof(document.documentMode)=='undefined' || document.documentMode < 8));
-
-        this.count = history.length;
-        this.states = [];
-        this.states[this.count] = this.getHash();
         this.state = null;
         this.supports = (('onhashchange' in window) && (typeof(document.documentMode) == 'undefined' || document.documentMode > 7));
 
@@ -196,7 +224,6 @@ Transformers for QWrap 核心库
 
         return this;
     };
-
     mix(TF.Library.LocationHash.prototype, {
         initialize: function(){
             var self = this;
@@ -206,7 +233,7 @@ Transformers for QWrap 核心库
                 window.history.navigationMode = 'compatible';
             }
 
-             // IE8 in IE7 mode defines window.onhashchange, but never fires it...
+            // IE8 in IE7 mode defines window.onhashchange, but never fires it...
             if (this.supports) {
                 // The HTML5 way of handling DHTML history...
                 W(window).on('hashchange', function() {
@@ -219,11 +246,9 @@ Transformers for QWrap 核心库
                 }
             }
 
-
             if (this.options.start) {
                 this.start();
             }
-
         },
 
         initializeHistoryIframe: function() {
@@ -369,7 +394,7 @@ Transformers for QWrap 核心库
         }).slice(1);
     };
 
-    TF.Library.ComponentLoader = function(options) {
+    TF.Library.ComponentLoader = function(options, componentMgrInstance) {
         this.options = {
             name: 'Default',
             url: '',
@@ -385,6 +410,9 @@ Transformers for QWrap 核心库
         mix(this.options, options, true);
 
         CustEvent.createEvents(this, ['complete', 'failure']);
+
+        // 判断是加载到全局组件管理器，还是私有组件管理器中
+        this.componentMgrInstance = componentMgrInstance ? componentMgrInstance : TF.Core.ComponentMgr;
 
         this.initialize();
 
@@ -404,8 +432,10 @@ Transformers for QWrap 核心库
             this.name = name.join('-').camelize().capitalize();
 
             // 注册到组件管理器
-            TF.Core.ComponentMgr.register(this.fullName);
+            this.componentMgrInstance.register(this.fullName);
+        }
 
+        , load: function() {
             this.preload();
         }
 
@@ -452,11 +482,13 @@ Transformers for QWrap 核心库
                 this._instance.sys.fullName = this.fullName;
                 this._instance.sys.name = this.name;
                 this._instance.sys.channelName = this.channelName;
+                // 组件需要知道自己的父级组件管理器是谁
+                this._instance.sys.parentComponentMgr = this.componentMgrInstance;
 
                 // 实例准备就绪
                 this._instance.InstanceReady(this);
 
-                TF.Core.ComponentMgr.loaded(this.fullName, this._instance);
+                this.componentMgrInstance.loaded(this.fullName, this._instance);
 
                 // 看是否是延迟渲染
                 if (!this.options.lazyRender) {
@@ -477,17 +509,6 @@ Transformers for QWrap 核心库
         }
 
     });
-
-
-
-
-    //TF.Component.create = function(){};
-    //TF.Component.load = function(){};
-    //TF.Core.ComponentLoader;
-    //TF.Core.ComponentMgr;
-    //TF.Core.Window;
-    //TF.Core.windowMgr;
-
 
     // 组件系统内部方法
     var componentSys = {
@@ -595,24 +616,23 @@ Transformers for QWrap 核心库
 
             if (this.options.applyTo) {
                 //直接渲染
-                this.loadComplete(W(this.options.applyTo));
+                this._loadComplete(W(this.options.applyTo));
             }
             else if (this.options.contentEl) {
                 //直接渲染
-                this.loadComplete(W(this.options.contentEl).cloneNode(true));
+                this._loadComplete(W(this.options.contentEl).cloneNode(true));
             }
             else {
-                this.loadContent();
+                this._loadContent();
             }
         },
 
-        // Ajax 装载组件内容
-        loadContent: function() {
+        // 装载组件模板
+        _loadContent: function() {
             if (this.options.url == '') {
                 this.options.url = TF.Helper.Utility.getComponentViewUrl(this.channelName, this.name);
             }
-
-            if (this.options.url.indexOf("http://") < 0) {
+            else if (this.options.url.indexOf("http://") < 0) {
                 this.options.url = TF.Helper.Utility.siteUrl(this.options.url);
             }
 
@@ -622,7 +642,7 @@ Transformers for QWrap 核心库
                     data: this.options.data,
                     method: 'get',
                     timeout: 10000,
-                    onsucceed: bind(this.loadComplete, this),
+                    onsucceed: bind(this._loadComplete, this),
                     onerror: bind(function() {
                         //this.loadError('4. Ajax Error!');
                     }, this)
@@ -632,7 +652,7 @@ Transformers for QWrap 核心库
             this.loader.send();
         },
 
-        loadComplete: function(ajaxEvent) {
+        _loadComplete: function(ajaxEvent) {
             var response, responseTree;
 
             response = ajaxEvent.target.requester.responseText;
@@ -658,7 +678,7 @@ Transformers for QWrap 核心库
             var element = responseTree;
 
             // 存储经过包装的元素
-            this.setTopElement(element);
+            this._setTopElement(element);
 
             // 是否以隐藏的方式渲染组件
             if (this.hidden) {
@@ -714,8 +734,8 @@ Transformers for QWrap 核心库
                 }
                 else {
                     // 处理事件委托绑定
-                    this.delegateJsAction();
-                    this.delegateEvent(this.instance.bindEvent);
+                    this._delegateJsAction();
+                    this._delegateEvent(this.instance.bindEvent);
 
                     this.instance.DomReady();
 
@@ -744,7 +764,7 @@ Transformers for QWrap 核心库
             return true;
         },
 
-        delegateEvent: function(configs){
+        _delegateEvent: function(configs){
             var value, test, eventName;
             for (var key in configs) {
                 value = configs[key];
@@ -763,8 +783,9 @@ Transformers for QWrap 核心库
             }
         },
 
-        delegateJsAction: function(){
+        _delegateJsAction: function(){
             this.topElement.delegate('.js-action', 'click', bind(function(e){
+                e.preventDefault();
                 var action = W(e.target).attr('data-action');
                 this.postMessage(action, {event: e});
             }, this));
@@ -804,7 +825,7 @@ Transformers for QWrap 核心库
 
                 TF.Core.Application.subscribe('GlobalRoute', function(uri) {
                     func(uri.toLowerCase());
-                }, this);
+                });
 
                 // 一般这里会错过首次的全局路由事件，所以要手动执行一次
                 var uri = TF.Core.Router.parseUri();
@@ -823,26 +844,18 @@ Transformers for QWrap 核心库
             }
         },
 
-        setTopElement: function(el, prefix) {
+        _setTopElement: function(el, prefix) {
             prefix = prefix || 'transformers_gen';
             this.topElement = W(el).attr('id', prefix + '_' + TF.Helper.Utility.random());
         },
-        unsetTopElement: function() {
+        _unsetTopElement: function() {
             if (this.topElement && this.topElement.length > 0)
             {
                 this.topElement.parentNode().empty();
                 this.topElement = null;
             }
         },
-        setName: function(name, realname) {
-            //this._name = T.string.hyphenate(name).replace(/-/g, '_').slice(1);
-            //this._real_name = T.string.hyphenate(realname).replace(/-/g, '_').slice(1);
-        },
-        setChannelName: function(name, realname) {
-            //this._channelName = name.toLowerCase();
-            //this._realChannelName = realname.toLowerCase();
-        },
-        // 取自己的组件名，有别名取别名，否则取真名
+        // 取自己的组件名
         getComponentName: function() {
             //return T.string.capitalize(this._channelName) + T.string.capitalize(T.string.camelCase(this._name.replace(/_/g, '-')));
         },
@@ -861,13 +874,11 @@ Transformers for QWrap 核心库
                 url = TF.Helper.Utility.siteUrl(url.slice(1));
             }
 
-            console.log(url);
-
             var ajaxOptions = {
                 url: url,
                 method: 'get',
                 timeout: 10000,
-                oncomplete: bind(this.sendComplete, this.instance)
+                oncomplete: bind(this._sendComplete, this.instance)
             };
             options = options || {};
             if (Object.isFunction(options.fn)) {
@@ -886,7 +897,7 @@ Transformers for QWrap 核心库
         },
 
         // 装载完成
-        sendComplete: function(ajaxEvent) {
+        _sendComplete: function(ajaxEvent) {
             // 如果是取消的请求，则什么也不做，我们只关心真正请求回来的数据，而不关心请求的状态
             if (ajaxEvent.target.state == QW.Ajax.STATE_CANCEL) {
                 return;
@@ -903,7 +914,7 @@ Transformers for QWrap 核心库
                 result = {'errno': 999, 'errmsg': 'Error!', data: []}; // 内部错误
             }
 
-            var isError = (result.errno != 0);
+            var isError = !TF.Core.Config.ajaxDataValidation(result);
             var args;
 
             if (isError){
@@ -956,7 +967,7 @@ Transformers for QWrap 核心库
             if (!name) return;
     //{'template':'xxx', 'target':'xxxx'}
             //this._setLoadingMsg();
-            var url = TF.Helper.Utility.getComponentUrl('model', this.channelName, this.name);
+            var url = TF.Helper.Utility.getComponentUrl(TF.Helper.Utility.getDefaultDataUri(), this.channelName, this.name);
             var me = this.instance;
 
             name = TF.Helper.Utility.toArray(name);
@@ -1014,18 +1025,18 @@ Transformers for QWrap 核心库
                 }
             }, this);
 
-            this.renderAjaxTemplate(template, target, url, mix({'fn_error': bind(this.instance.RenderError, this.instance)}, args));
+            this._renderAjaxTemplate(template, target, url, mix({'fn_error': bind(this.instance.RenderError, this.instance)}, args));
         },
 
         // ajax 模版渲染
-        renderAjaxTemplate: function(template, target, url, options) {
+        _renderAjaxTemplate: function(template, target, url, options) {
             var waiter = [];
             var w, pos, object;
 
             template = TF.Helper.Utility.toArray(template);
             target = TF.Helper.Utility.toArray(target);
 
-            if (url.indexOf("http://") < 0) {
+            if (url.indexOf("http://") < 0 && url.indexOf("/") != 0) {
                 url = TF.Helper.Utility.siteUrl(url);
             }
 
@@ -1099,23 +1110,8 @@ Transformers for QWrap 核心库
                         result = mix(result, options.addition, true);
                     }
 
-                    if (result.errno != 0) {
-                        // 如果用户登陆信息验证失败，立即刷新以便重新登陆
-                        if (result.errno == 403) {
-                            //window.location.reload();
-                            return;
-                        }
-
-                        if (typeof(options) != 'undefined' && Object.isFunction(options.fn_error)) {
-                            options.fn_error(result);
-                        }
-                        else {
-                            template.forEach(function(t, i){
-                                W(target[i]).html(result.errmsg || '');
-                            });
-                        }
-                    }
-                    else {
+                    if (TF.Core.Config.ajaxDataValidation(result)) {
+                        // 执行成功
                         template.forEach(function(t, i) {
                             object = W(target[i]);
                             try {
@@ -1128,6 +1124,23 @@ Transformers for QWrap 核心库
 
                         if (typeof(options) != 'undefined' && Object.isFunction(options.fn)) {
                             options.fn(result);
+                        }
+                    }
+                    else {
+                        // 执行失败
+                        // 如果用户登陆信息验证失败，立即刷新以便重新登陆
+//                        if (result.errno == 403) {
+//                            //window.location.reload();
+//                            return;
+//                        }
+
+                        if (typeof(options) != 'undefined' && Object.isFunction(options.fn_error)) {
+                            options.fn_error(result);
+                        }
+                        else {
+                            template.forEach(function(t, i){
+                                W(target[i]).html(result.errmsg || '');
+                            });
                         }
                     }
 
@@ -1158,6 +1171,7 @@ Transformers for QWrap 核心库
             var el = this.topElement;
             var id;
             var comName;
+            var me = this;
             if (el.length > 0) {
                 id = el.attr('id');
                 // 先隐藏除 name 所指定的组件外的其它组件
@@ -1168,7 +1182,7 @@ Transformers for QWrap 核心库
                         comName = comEl.attr('data-tf-component');
 
                         if (comName) {
-                            TF.Core.ComponentMgr.post(comName, 'component-hide');
+                            me.parentComponentMgr.post(comName, 'component-hide');
                         }
                     }
                 });
@@ -1192,6 +1206,10 @@ Transformers for QWrap 核心库
 
         isRendered: function() {
             return this.rendered;
+        },
+
+        createComponentMgr: function(callback) {
+            return createComponentMgrInstance(callback);
         }
     };
 
@@ -1245,12 +1263,13 @@ Transformers for QWrap 核心库
             //window.location = '#';
             //TF.Singleton.page.unsetLoadingMsg();
             //TF.Singleton.page.setErrorMsg(result.error);
-            this._loaded();
+            //this._loaded();
         }
     });
 
-    // 组件管理器
-    TF.Core.ComponentMgr = function(){
+
+    // 制作组件管理器类
+    var createComponentMgrInstance = function(loadedCallback){
         var length = 0,
             // 组件关联数组，key 为组件名，value 为组件实例
             components = new TF.Library.Hash(),
@@ -1289,8 +1308,14 @@ Transformers for QWrap 核心库
                 this.show(item);
             }, exports);
             preloadShow.length = 0;
-            // 广播一个全部组件加载完毕的消息
-            TF.Core.Application.publish('GlobalComponentLoaded');
+
+            if (Object.isFunction(loadedCallback)) {
+                loadedCallback();
+            }
+            else {
+                // 广播一个全部组件加载完毕的消息
+                TF.Core.Application.publish('GlobalComponentLoaded');
+            }
         };
 
         var exports = {
@@ -1326,11 +1351,13 @@ Transformers for QWrap 核心库
                 if (isLoading) return;
 
                 preload.forEach(function(item) {
-                    new TF.Library.ComponentLoader(item).on('complete', loadComplete);
-                });
+                    var obj = new TF.Library.ComponentLoader(item, this);
+                    obj.on('complete', loadComplete);
+                    obj.load();
+                }, this);
             },
 
-            // 是否进度条还在装载中
+            // 是否还在装载中
             isLoading: function() {
                 return isLoading;
             },
@@ -1379,7 +1406,9 @@ Transformers for QWrap 核心库
 
                 //TF.Singleton.page.setLoadingMsg();
                 // 加载组件
-                new TF.Library.ComponentLoader(options).on('complete', fn);
+                var obj = new TF.Library.ComponentLoader(options, this);
+                obj.on('complete', fn);
+                obj.load();
             },
 
             // 删除组件
@@ -1467,8 +1496,10 @@ Transformers for QWrap 核心库
         };
 
         return exports;
-    }();
+    };
 
+    // 全局组件管理器（单例模式）
+    TF.Core.ComponentMgr = createComponentMgrInstance();
 
     // URI 路由部分
     TF.Core.Router = function() {
@@ -1587,7 +1618,7 @@ Transformers for QWrap 核心库
     var appSubscriptions = new TF.Library.Hash();
     TF.Core.Application = {
         create: function(config) {
-            mix(TF.Core.config, config, true);
+            mix(TF.Core.Config, config, true);
         },
 
         isReady: function() {
