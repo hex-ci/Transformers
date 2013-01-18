@@ -11,11 +11,11 @@
  * @author: Hex
  */
 
-(function () {
+;(function () {
     var TF,
         Transformers = TF = Transformers || {
-        'version': '0.1',
-        'build': '20130115'
+        'version': '0.2',
+        'build': '20130118'
     };
 
     var mix = QW.ObjectH.mix,
@@ -147,8 +147,12 @@
         },
 
         combine: function(properties){
-            Object.map(properties || {}, function(key, value){
-                this.include(key, value);
+            Object.map(properties || {}, function(value, key){
+                if (this.has(key)) {
+                    if (!this.data[key]) {
+                        this.data[key] = value;
+                    }
+                }
             }, this);
 
             return this;
@@ -183,7 +187,7 @@
         },
 
         include: function(key, value){
-            if (this.data[key] == undefined) {
+            if (this.data[key] != undefined) {
                 this.data[key] = value;
             }
 
@@ -385,6 +389,51 @@
     });
 
 
+    // 应用程序部分
+    var appReady = false;
+    var appSubscriptions = new TF.Library.Hash();
+    TF.Core.Application = {
+        create: function(config) {
+            mix(TF.Core.Config, config, true);
+        },
+
+        isReady: function() {
+            return appReady;
+        },
+
+        // 订阅主题
+        subscribe: function(name, fn, scope) {
+            var key = TF.Helper.Utility.random();
+
+            if (!appSubscriptions.has(name)) {
+                appSubscriptions.set(name, new TF.Library.Hash());
+            }
+
+            appSubscriptions.get(name).set(key, {'fn': fn, 'scope': scope});
+
+            // 返回 subscription 句柄
+            return {'key': name, 'value': key};
+        },
+
+        // 取消订阅
+        unsubscribe: function(handle) {
+            if (handle && appSubscriptions.has(handle.key)) {
+                appSubscriptions.get(handle.key).erase(handle.value);
+            }
+        },
+
+        // 发布主题
+        publish: function(name, args) {
+            if (appSubscriptions.has(name)) {
+                appSubscriptions.get(name).forEach(function(item, i) {
+                    if (item.fn) {
+                        item.fn.apply(item.scope, args || []);
+                    }
+                }, this);
+            }
+        }
+
+    };
 
     // 组件加载器类
 
@@ -735,7 +784,7 @@
                 else {
                     // 处理事件委托绑定
                     this._delegateJsAction();
-                    this._delegateEvent(this.instance.bindEvent);
+                    this._delegateEvent(this.instance.Events);
 
                     this.instance.DomReady();
 
@@ -765,20 +814,17 @@
         },
 
         _delegateEvent: function(configs){
-            var value, test, eventName;
+            if (!configs) {
+                return;
+            }
+            var value;
             for (var key in configs) {
                 value = configs[key];
-                test = key.match(/\{(\S+)\}(.+)/);
-                if (test) {
-                    eventName = test[1];
-                    selector = test[2].trim();
-                }
-                else {
-                    eventName = 'click';
-                    selector = key;
-                }
                 if (Object.isFunction(value)) {
-                    this.topElement.delegate(selector, eventName, bind(value, this.instance));
+                    value = {"click": value};
+                }
+                for (var type in value) {
+                    this.topElement.delegate(key, type, bind(value[type], this.instance));
                 }
             }
         },
@@ -1209,8 +1255,40 @@
         },
 
         createComponentMgr: function(callback) {
-            return createComponentMgrInstance(callback);
+            return TF.Core.Application.createComponentMgrInstance(callback);
+        },
+
+        cancelRequest: function() {
+            if (this.requester) {
+                this.requester.cancel();
+                //TF.Singleton.page.unsetLoadingMsg();
+            }
+        },
+
+        destroy: function() {
+            if (this.instance) {
+                if (this.instance.DomDestroy(this.instance) == false) {
+                    return;
+                }
+            }
+
+            // 从组件管理器中删除自己
+            this.parentComponentMgr.remove(this.fullName);
+
+            try {
+                this.cancelRequest();
+
+                // 清除表单验证对象
+                //this.clearValidation();
+
+                this._unsetTopElement();
+
+                this.instance = null;
+            }
+            catch (e) {
+            }
         }
+
     };
 
     TF.Component.Default = function(options) {
@@ -1269,7 +1347,7 @@
 
 
     // 制作组件管理器类
-    var createComponentMgrInstance = function(loadedCallback){
+    TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallback){
         var length = 0,
             // 组件关联数组，key 为组件名，value 为组件实例
             components = new TF.Library.Hash(),
@@ -1309,12 +1387,14 @@
             }, exports);
             preloadShow.length = 0;
 
-            if (Object.isFunction(loadedCallback)) {
-                loadedCallback();
-            }
-            else {
+            if (isGlobal) {
                 // 广播一个全部组件加载完毕的消息
                 TF.Core.Application.publish('GlobalComponentLoaded');
+            }
+            else {
+                if (Object.isFunction(loadedCallback)) {
+                    loadedCallback();
+                }
             }
         };
 
@@ -1499,7 +1579,7 @@
     };
 
     // 全局组件管理器（单例模式）
-    TF.Core.ComponentMgr = createComponentMgrInstance();
+    TF.Core.ComponentMgr = TF.Core.Application.createComponentMgrInstance(true);
 
     // URI 路由部分
     TF.Core.Router = function() {
@@ -1614,51 +1694,6 @@
     }();
 
 
-    var appReady = false;
-    var appSubscriptions = new TF.Library.Hash();
-    TF.Core.Application = {
-        create: function(config) {
-            mix(TF.Core.Config, config, true);
-        },
-
-        isReady: function() {
-            return appReady;
-        },
-
-        // 订阅主题
-        subscribe: function(name, fn, scope) {
-            var key = TF.Helper.Utility.random();
-
-            if (!appSubscriptions.has(name)) {
-                appSubscriptions.set(name, new TF.Library.Hash());
-            }
-
-            appSubscriptions.get(name).set(key, {'fn': fn, 'scope': scope});
-
-            // 返回 subscription 句柄
-            return {'key': name, 'value': key};
-        },
-
-        // 取消订阅
-        unsubscribe: function(handle) {
-            if (handle && appSubscriptions.has(handle.key)) {
-                appSubscriptions.get(handle.key).erase(handle.value);
-            }
-        },
-
-        // 发布主题
-        publish: function(name, args) {
-            if (appSubscriptions.has(name)) {
-                appSubscriptions.get(name).forEach(function(item, i) {
-                    if (item.fn) {
-                        item.fn.apply(item.scope, args || []);
-                    }
-                }, this);
-            }
-        }
-
-    };
-
     Dom.ready(function(){
         appReady = true;
         TF.Core.Application.publish('DomReady');
@@ -1673,5 +1708,288 @@
     QW.provide({
         TF: TF
     });
+
+}());
+
+
+// 支持窗体部分
+;(function(){
+    var mix = QW.ObjectH.mix,
+        bind = QW.FunctionH.bind;
+
+    TF.Core.WindowMgr = function() {
+        var defaultOptions = {
+            "wrapId": 'transformers_win',
+            "className": "panel-t1",
+            "title": "标题",
+            "header": '',
+            "body": '',
+            "footer": '',
+            "withClose":true,
+            "withCorner":false,
+            "withCue":false,
+            "withShadow":true,
+            "withBgIframe":false,
+            "keyEsc":false,
+            "withMask":true,
+            "dragable":true,
+            "resizable":false,
+            "posCenter":true,
+            "posAdjust":true
+        };
+
+        var windows = new TF.Library.Hash();
+
+        var disableButton = function(id) {
+            W('#' + id).query('.button').attr('disabled', 'disabled');
+        };
+
+        var enableButton = function(id) {
+            W('#' + id).query('.button').removeAttr('disabled');
+        };
+
+        var windowSys = {
+            clickButton: function(button) {
+                if (button) {
+                    this.button = button;
+                }
+
+                if (!this.disableButton || this.button == 'close') {
+                    // 禁用所有按钮
+                    this.disable();
+
+                    var args = {
+                        close: (this.button != 'ok'),
+                        button: this.button,
+                        enabled: (this.button != 'ok')
+                    };
+
+                    this.instance.sys.postMessage('click-button', args);
+
+                    if (args.enabled) {
+                        this.enable();
+                    }
+
+                    if (args.close) {
+                        this.close();
+                    }
+                }
+            },
+
+            // 关闭按钮
+            disable: function() {
+                this.disableButton = true;
+                disableButton(this.panel.wrapId);
+            },
+
+            // 允许按钮
+            enable: function() {
+                this.disableButton = false;
+                enableButton(this.panel.wrapId);
+            },
+
+            close: function() {
+                if (this.instance) {
+                    if (this.instance.DomDestroy() === false) {
+                        return;
+                    }
+
+                    this.instance.sys.cancelRequest();
+                    this.instance.sys.postMessage('component_destroy');
+                }
+
+                // 清除表单验证
+//                if (this.validation) {
+//                    this.validation.clear();
+//                }
+                this.options.fn(this, this.button);
+                this.instance = null;
+
+                // 先隐藏后销毁
+                if (this.panel) {
+                    this.panel.hide();
+                    this.panel.dispose();
+                }
+            }
+
+        };
+
+        // 构建按钮
+        var makeButton = function(id, buttons, defaultButtons) {
+            // 移除原有关闭按钮
+            W('#' + id + ' span.close').removeNode();
+            // 添加新的关闭按钮
+            W('#' + id).appendChild(W('<span class="button close" data-button="close"></span>')[0]);
+
+            var btns = new TF.Library.Hash(buttons);
+            btns.combine(defaultButtons || {'ok': '确定'});
+            var ft = W('#' + id + ' .ft');
+            var el;
+            btns.forEach(function(value, key){
+                el = W('<button class="button ' + key + '" data-button="' + key + '">' + value + '</button>');
+                ft.appendChild(el);
+            });
+        };
+
+        var bindButtonEvent = function(id, fn) {
+            W('#' + id).delegate('.button', 'click', function(e){
+                var el = W(e.target);
+                if (el.attr('disabled') == 'disabled') {
+                    return;
+                }
+                fn(W(e.target).attr('data-button'));
+            });
+        };
+
+        var getId = function() {
+            return 'transformers_win_' + TF.Helper.Utility.random();
+        };
+
+        var exports = {
+            show: function(options){
+                options = options || {};
+                mix(options, defaultOptions);
+
+                options.wrapId = getId();
+
+                var panel = new QW.BasePanel(options);
+
+                panel.show(null, null, options.width || 300);
+                // 加载组件
+                options.renderTo = '#' + options.wrapId + ' .bd';
+                var mgr = TF.Core.Application.createComponentMgrInstance();
+                var obj = new TF.Library.ComponentLoader(options, mgr);
+                obj.on('complete', function(eventObj){
+
+                    // 借给组件一些窗体管理函数
+                    eventObj.instance.win = {
+                        panel: panel,
+                        instance: eventObj.instance,
+                        options: options
+                    };
+                    mix(eventObj.instance.win, windowSys, true);
+
+                    makeButton(options.wrapId, options.buttons, {'ok': '确定', 'cancel': '取消'});
+                    bindButtonEvent(options.wrapId, function(button){
+                        eventObj.instance.win.clickButton(button);
+                    });
+                });
+                obj.load();
+                // 显示加载中
+            },
+
+            alert: function(title, msg, width, fn, options){
+                options = options || {};
+                mix(options || {}, defaultOptions);
+
+                options.wrapId = getId();
+
+                options.title = title;
+                options.body = '<div class="content">' + msg + '</div>';
+
+                var panel = new QW.BasePanel(options);
+
+                makeButton(options.wrapId, options.buttons || {'ok':''});
+                bindButtonEvent(options.wrapId, function(button){
+                    var args = {
+                        close: true,
+                        enabled: true
+                    };
+
+                    if (Object.isFunction(fn)) {
+                        fn(button, args, panel);
+                    }
+
+                    if (args.enabled) {
+                        enableButton(options.wrapId);
+                    }
+                    else {
+                        disableButton(options.wrapId);
+                    }
+
+                    if (args.close) {
+                        panel.hide();
+                        panel.dispose();
+                    }
+                });
+                panel.show(null, null, width || 300);
+            },
+
+            confirm: function(title, msg, width, fn, options){
+                options = options || {};
+                options.buttons = options.buttons || {'yes':'是', 'no': '否', 'cancel':'取消'};
+                this.alert(title, msg, width, fn, options);
+            },
+
+            prompt: function(title, msg, width, fn, options){
+                options = options || {};
+                mix(options || {}, defaultOptions);
+
+                options.wrapId = getId();
+
+                options.title = title;
+                options.body = '<div class="prompt-content">' + msg + '</div>';
+
+                var el;
+                var tmp = W('<div></div>');
+
+                if (options.multiline) {
+                    el = W(Dom.createElement('textarea', {
+                        'class': options.inputClass || ''
+                    })).css({'width': options.inputCol || '100%', 'height': options.inputRow || '50px'});
+                }
+                else {
+                    el = W(Dom.createElement('input', {
+                        'type': 'text',
+                        'class': options.inputClass || '',
+                        'size': options.inputSize || '10'
+                    })).css({'width': options.inputCol || '100%'});
+                }
+
+                tmp.appendChild(el);
+
+                options.body += '<div class="input">' + tmp.html() + '</div>';
+
+                var panel = new QW.BasePanel(options);
+
+                makeButton(options.wrapId, options.buttons || {'ok':'确定', 'cancel':'取消'});
+                bindButtonEvent(options.wrapId, function(button){
+                    var args = {
+                        close: true,
+                        enabled: true
+                    };
+
+                    if (Object.isFunction(fn)) {
+                        var text = '';
+
+                        if (options.multiline) {
+                            text = W('#' + options.wrapId + ' .bd textarea').val();
+                        }
+                        else {
+                            text = W('#' + options.wrapId + ' .bd input').val();
+                        }
+
+                        fn(button, text, args, panel);
+                    }
+
+                    if (args.enabled) {
+                        enableButton(options.wrapId);
+                    }
+                    else {
+                        disableButton(options.wrapId);
+                    }
+
+                    if (args.close) {
+                        panel.hide();
+                        panel.dispose();
+                    }
+                });
+                panel.show(null, null, width || 300);
+            }
+
+        };
+
+        return exports;
+    }();
 
 }());
