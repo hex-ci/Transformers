@@ -14,8 +14,8 @@
 ;(function () {
     var TF,
         Transformers = TF = Transformers || {
-        'version': '0.2',
-        'build': '20130118'
+        'version': '0.4',
+        'build': '20130201'
     };
 
     var mix = QW.ObjectH.mix,
@@ -34,10 +34,125 @@
         jsUriPattern: 'resource/js/{$application}/{$channel}/{$name}.js',
         dataUriPattern: '{$application}/{$channel}/{$name}/{$uri}',
         defaultDataUri: 'model',
-        ajaxDataValidation: function(obj){
-            return (obj.errno == 0);
-        }
+
+        // 提供一些和页面展现相关的方法给框架，类似实现一些框架所需要的接口
+        mentor: {}
     };
+
+
+    // 需要由外部程序提供方法才能实现相应功能
+    var mentor = {};
+
+    // 页面状态提示相关方法
+    mentor.Status = function(){
+        var isfun = QW.ObjectH.isFunction;
+
+        var exports = {
+            unsetStatusMsg: function() {
+                var mt = TF.Core.Config.mentor;
+                if (mt.Status && isfun(mt.Status.unsetStatusMsg)){
+                    mt.Status.unsetStatusMsg.apply(mt.Status, arguments);
+                }
+            },
+
+            setSuccMsg: function(msg){
+                var mt = TF.Core.Config.mentor;
+                if (mt.Status && isfun(mt.Status.setSuccMsg)){
+                    mt.Status.setSuccMsg.apply(mt.Status, arguments);
+                }
+            },
+
+            setFailMsg: function(msg){
+                var mt = TF.Core.Config.mentor;
+                if (mt.Status && isfun(mt.Status.setFailMsg)){
+                    mt.Status.setFailMsg.apply(mt.Status, arguments);
+                }
+            },
+
+            setWarningMsg: function(msg){
+                var mt = TF.Core.Config.mentor;
+                if (mt.Status && isfun(mt.Status.setWarningMsg)){
+                    mt.Status.setWarningMsg.apply(mt.Status, arguments);
+                }
+            },
+
+            setLoadingMsg: function(msg) {
+                var mt = TF.Core.Config.mentor;
+                if (mt.Status && isfun(mt.Status.setLoadingMsg)){
+                    mt.Status.setLoadingMsg.apply(mt.Status, arguments);
+                }
+            },
+
+            unsetLoadingMsg: function() {
+                var mt = TF.Core.Config.mentor;
+                if (mt.Status && isfun(mt.Status.unsetLoadingMsg)){
+                    mt.Status.unsetLoadingMsg.apply(mt.Status, arguments);
+                }
+            }
+        };
+
+        return exports;
+    }();
+
+
+    // 模板渲染相关的方法
+    mentor.Template = function(){
+        var isfun = QW.ObjectH.isFunction;
+
+        var exports = {
+            render: function(text, opts) {
+                var mt = TF.Core.Config.mentor;
+                if (mt.Template && isfun(mt.Template.render)){
+                    return mt.Template.render.apply(mt.Template, arguments);
+                }
+                else {
+                    return text.tmpl(text, opts);
+                }
+            }
+        };
+
+        return exports;
+    }();
+
+
+    // Ajax 相关的一些方法，目前主要是接口调用是否成功的验证
+    mentor.Ajax = function(){
+        var isfun = QW.ObjectH.isFunction;
+
+        var exports = {
+
+            validation: function(jsonObject){
+                var mt = TF.Core.Config.mentor;
+                if (mt.Ajax && isfun(mt.Ajax.validation)){
+                    return mt.Ajax.validation.apply(mt.Ajax, arguments);
+                }
+                else {
+                    return true;
+                }
+            }
+
+        };
+
+        return exports;
+    }();
+
+
+
+    // 不是数组的话转成数组，如果是数组原样返回
+    var toArray = function (source) {
+        if (source === null || source === undefined)
+            return [];
+        if (Object.isArray(source))
+            return source;
+
+        // The strings and functions also have 'length'
+        if (typeof source.length !== 'number' || typeof source === 'string' || Object.isFunction(source)) {
+            return [source];
+        }
+
+        return [].slice.call(source);
+    };
+
 
     // 一些工具类
 
@@ -45,72 +160,71 @@
     TF.Helper.Utility = {
         baseUrl: function(){
             return TF.Core.Config.baseUrl;
-        }
+        },
 
-        , siteUrl: function(uri){
+        siteUrl: function(uri){
             return TF.Core.Config.baseUrl + uri;
-        }
+        },
 
-        , getApplicationPath: function() {
+        getApplicationPath: function() {
             return TF.Core.Config.name ? TF.Core.Config.name.toLowerCase() + '/' : '';
-        }
+        },
 
-        , getComponentUrl: function(uri, channelName, name) {
+        getComponentUrl: function(uri, channelName, name) {
             var pattern = TF.Core.Config.dataUriPattern;
             var str = pattern.tmpl({
                 application: TF.Core.Config.name.toLowerCase(),
                 channel: channelName.toLowerCase(),
-                name: decamelize(name),
+                name: TF.Helper.Utility.toComponentUriName(name, '_'),
                 uri: uri
             });
 
             return TF.Helper.Utility.baseUrl() + str;
-        }
+        },
 
-        , getComponentViewUrl: function(channelName, name) {
+        getComponentViewUrl: function(channelName, name) {
             var pattern = TF.Core.Config.templateUriPattern;
             var str = pattern.tmpl({
                 application: TF.Core.Config.name.toLowerCase(),
                 channel: channelName.toLowerCase(),
-                name: decamelize(name)
+                name: TF.Helper.Utility.toComponentUriName(name, '_')
             });
 
             return TF.Helper.Utility.baseUrl() + str;
-        }
+        },
 
-        , getComponentJsUrl: function(channelName, name) {
+        getComponentJsUrl: function(channelName, name) {
             var pattern = TF.Core.Config.jsUriPattern;
             var str = pattern.tmpl({
                 application: TF.Core.Config.name.toLowerCase(),
                 channel: channelName.toLowerCase(),
-                name: decamelize(name)
+                name: TF.Helper.Utility.toComponentUriName(name)
             });
 
             return TF.Helper.Utility.baseUrl() + str;
-        }
+        },
 
-        , getDefaultDataUri: function() {
+        getDefaultDataUri: function() {
             return TF.Core.Config.defaultDataUri;
-        }
+        },
 
         // 生成随机数字字符串
-        , random: function() {
+        random: function() {
             return ((new Date()).getTime() + Math.floor(Math.random()*9999));
+        },
+
+        // 转成大小写形式的组件名
+        toComponentName: function(uriName) {
+            return uriName.camelize().capitalize();
+        },
+
+        // 转成小写分隔符形式的组件名
+        toComponentUriName: function(name, sep) {
+            return name.replace(/[A-Z]/g, function(a) {
+                return (sep || '-') + a.toLowerCase();
+            }).slice(1);
         }
 
-        , toArray: function (source) {
-            if (source === null || source === undefined)
-                return [];
-            if (Object.isArray(source))
-                return source;
-
-            // The strings and functions also have 'length'
-            if (typeof source.length !== 'number' || typeof source === 'string' || Object.isFunction(source)) {
-                return [source];
-            }
-
-            return [].slice.call(source);
-        }
     };
 
 
@@ -203,7 +317,17 @@
         },
 
         toQueryString: function(){
-            return Object.encodeURIJson(this.data);
+            var s = [];
+            for( var p in this.data ){
+                if(this.data[p]==null) continue;
+                if(this.data[p] instanceof Array)
+                {
+                    for (var i=0;i<this.data[p].length;i++) s.push( encodeURIComponent(p) + '[]=' + encodeURIComponent(this.data[p][i]));
+                }
+                else
+                    s.push( encodeURIComponent(p) + '=' + encodeURIComponent(this.data[p]));
+            }
+            return s.join('&');
         }
     });
 
@@ -214,6 +338,7 @@
             blank_page: 'javascript:0',
             start: false
         };
+        this.prefix = '#';
         this.iframe = null;
         this.handle = false;
         this.useIframe = (Browser.ie && (typeof(document.documentMode)=='undefined' || document.documentMode < 8));
@@ -292,19 +417,23 @@
 
         getHash: function() {
             var href = decodeURI(top.location.href);
-            var pos = href.indexOf('#') + 1;
+            var pos = href.indexOf(this.prefix) + 1;
             return (pos) ? href.substr(pos) : '';
         },
 
+        // 不带#号
         setHash: function(hash) {
-            if (this.supports) {
-                top.location.hash = hash || '#';
+            if (this.getHash() == hash) {
+                // 如果hash没有变化 则不引发任何事件
                 return;
             }
 
-            var href = decodeURI(hash);
-            var pos = href.indexOf('#') + 1;
-            hash = (pos) ? href.substr(pos) : '';
+            hash = encodeURI(hash);
+
+            if (this.supports) {
+                top.location.hash = this.prefix + hash || this.prefix;
+                return;
+            }
 
             this.setState(hash);
 
@@ -323,8 +452,10 @@
             if (this.iframe) {
                 var doc = this.iframe.contentWindow.document;
                 if (doc && doc.body.id == 'state') {
-                    var istate = doc.body.innerText;
-                    if (this.state == state) return istate;
+                    var istate = decodeURI(doc.body.innerText);
+                    if (this.state == state) {
+                        return istate;
+                    }
                     this.istateOld = true;
                 }
                 else {
@@ -337,7 +468,7 @@
 
         setState: function(state, fix) {
             state = this.pick(state, '');
-            top.location.hash = state || '#';
+            top.location.hash = this.prefix + state || this.prefix;
 
             if (Browser.ie && (!fix || this.istateOld)) {
                 if (!this.iframe) {
@@ -435,14 +566,8 @@
 
     };
 
+
     // 组件加载器类
-
-    var decamelize = function(s) {
-        return s.replace(/[A-Z]/g, function(a) {
-            return '_' + a.toLowerCase();
-        }).slice(1);
-    };
-
     TF.Library.ComponentLoader = function(options, componentMgrInstance) {
         this.options = {
             name: 'Default',
@@ -475,7 +600,7 @@
             this._instanced = false;
             this.fullName = this.options.name;
 
-            var name = decamelize(this.options.name).split('_');
+            var name = TF.Helper.Utility.toComponentUriName(this.options.name).split('-');
             this.channelName = name[0].capitalize();
             name[0] = '';
             this.name = name.join('-').camelize().capitalize();
@@ -485,23 +610,23 @@
         }
 
         , load: function() {
-            this.preload();
+            this._preload();
         }
 
-        , preload: function() {
+        , _preload: function() {
             // 创建组件所需的名字空间
             namespace(this.channelName, TF.Component);
 
             var isLoad = (typeof TF.Component[this.channelName][this.name] == 'undefined' ? false : true);
 
             if (isLoad) {
-                this.createInstance();
+                this._createInstance();
             }
             else {
                 loadJs(TF.Helper.Utility.getComponentJsUrl(this.channelName, this.name), bind(function(){
                     if (typeof TF.Component[this.channelName][this.name] != 'undefined') {
                         // 加载成功
-                        this.createInstance();
+                        this._createInstance();
                     }
                     else {
                         // 加载失败
@@ -513,11 +638,12 @@
         }
 
         // 创建当前内容的名字空间实例
-        , createInstance: function() {
+        , _createInstance: function() {
             try {
                 this._instance = new TF.Component[this.channelName][this.name](this.options);
             }
             catch(e) {
+
             }
 
             // 组件实例化正确才加载内容
@@ -555,9 +681,16 @@
 
         getInstance: function() {
             return this._instance;
+        },
+
+        cancel: function() {
+            if (this._instance) {
+                this._instance.sys.cancelRender();
+            }
         }
 
     });
+
 
     // 组件系统内部方法
     var componentSys = {
@@ -649,7 +782,48 @@
         },
 
         route: function(args) {
-            this.onlyShow(args);
+            if (this.layoutType == 'normal') {
+                if (args) {
+                    // 传递页数给 fn 函数
+                    this.layoutData.page = this.getUriPage(args);
+                }
+                else {
+                    this.layoutData.page = 0;
+                }
+
+                this.showNormalLayout(true, false);
+            }
+            else {
+                this.onlyShow(args);
+            }
+
+//          else if (this.layoutType == 'tabs') {
+//              this._force_refresh = true;
+//              this._no_set_history = true;
+//
+//              if (args)
+//              {
+//                  var action = args.split('/');
+//
+//                  var index = this._tab_items_index.get(action[0]) || 0;
+//
+//                  // 传递页数给 fn 函数
+//                  //this._tab_items[this._tab_items_index.get(action[0])].fn(this._getHistoryMgrPage(args));
+//
+//                  this._tab_items[index].page = this._getHistoryMgrPage(args);
+//
+//                  this._tab.show(index);
+//              }
+//              else
+//              {
+//                  this._tab_items[0].page = 0
+//                  this._tab.show(0);
+//              }
+//
+//              this._force_refresh = false;
+//              this._no_set_history = false;
+//          }
+
         },
 
         render: function() {
@@ -676,6 +850,14 @@
             }
         },
 
+        // 刷新组件内容
+        refresh: function() {
+            if (!this.rendered) return;
+
+            this.refreshing = true;
+            this._loadContent();
+        },
+
         // 装载组件模板
         _loadContent: function() {
             if (this.options.url == '') {
@@ -693,6 +875,7 @@
                     timeout: 10000,
                     onsucceed: bind(this._loadComplete, this),
                     onerror: bind(function() {
+
                         //this.loadError('4. Ajax Error!');
                     }, this)
                 });
@@ -701,12 +884,26 @@
             this.loader.send();
         },
 
-        _loadComplete: function(ajaxEvent) {
+        _loadComplete: function(ajaxEvent) {;
+            // 如果是取消的请求，则什么也不做，我们只关心真正请求回来的数据，而不关心请求的状态
+            if (ajaxEvent.target.state == QW.Ajax.STATE_CANCEL) {
+                return;
+            }
+
+            if (!this.instance) {
+                return;
+            }
+
             var response, responseTree;
 
             response = ajaxEvent.target.requester.responseText;
 
             if (Object.isString(response)) {
+                // 解决 IE 下 innerHTML 不能直接设置 script 的问题
+                if (QW.Browser.ie) {
+                    response = response.replace(/(<div\s+class="TFComponent"\s*>)/ig, '$1<div style="display:none">tf</div>');
+                }
+
                 responseTree = W(Dom.createElement('div')).html(response).query('.TFComponent');
             }
             else if (Object.isWrap(response)) {
@@ -718,16 +915,22 @@
             }
 
             // 如果没有装载正确，则立即返回
-            if (!this.instance || responseTree.length == 0) {
-                //alert('组件装载出错，请刷新页面。');
-                //this._loadError('1. Ajax Error!');
+            if (responseTree.length == 0) {
+                if (response) {
+                    this._loadError('DEBUG: ' + response);
+                }
                 return;
             }
 
             var element = responseTree;
 
-            // 存储经过包装的元素
-            this._setTopElement(element);
+            if (this.refreshing) {
+                this.topElement.html(element.html());
+            }
+            else {
+                // 存储经过包装的元素
+                this._setTopElement(element);
+            }
 
             // 是否以隐藏的方式渲染组件
             if (this.hidden) {
@@ -757,7 +960,8 @@
                     try {
                         obj = QW.JSON.parse(data.html());
                     } catch (e) {}
-                    this.query().html(baidu.template(template.html(), {'ComponentData': obj}));
+                    this.query().html(mentor.Template.render(template.html(), {'ComponentData': obj}));
+                    this.instance.options['templateData'] = obj;
                 }
 
                 // 自动提取页面中的 options 值
@@ -785,6 +989,8 @@
                     // 处理事件委托绑定
                     this._delegateJsAction();
                     this._delegateEvent(this.instance.Events);
+                    this._setDefaultSubmit();
+                    this._setDefaultFocus();
 
                     this.instance.DomReady();
 
@@ -810,7 +1016,14 @@
 
             this.rendering = false;
 
+            // 刷新完毕
+            this.refreshing = false;
+
             return true;
+        },
+
+        _loadError: function(msg) {
+            console.log(msg);
         },
 
         _delegateEvent: function(configs){
@@ -831,10 +1044,59 @@
 
         _delegateJsAction: function(){
             this.topElement.delegate('.js-action', 'click', bind(function(e){
-                e.preventDefault();
+                if (e.target.tagName.toLowerCase() == 'a') {
+                    e.preventDefault();
+                }
                 var action = W(e.target).attr('data-action');
                 this.postMessage(action, {event: e});
             }, this));
+        },
+
+        // 设置默认按钮
+        _setDefaultSubmit: function() {
+            var form = this.query('form.js-button');
+            var me = this;
+
+            if (form.length > 0) {
+                form.un('submit');
+                form.on('submit', function(event) {
+                    event.preventDefault();
+                    form.query('button.js-default').first().fire('click');
+                });
+                // 如果没有 type=submit 的按钮则添加一个
+                if (form.query('button.js-default').attr('type') != 'submit') {
+                    form.appendChild(Dom.create('<div style="position:absolute;left:-9999px;top:-9999px;"><button type="submit"></button></div>'));
+                }
+            }
+        },
+
+        _setDefaultFocus: function() {
+            if (this.isHidden()) return;
+
+            var form = this.query('form[class~=js-focus]');
+            if (form.length > 0) {
+                var first = form.query('input[type=text]');
+                if (first.length > 0) {
+                    first.attr('autocomplete', 'off');
+                    this.setFocus(first);
+                }
+                else {
+                    first = form.query('textarea');
+                    this.setFocus(first);
+                }
+            }
+        },
+
+        setFocus: function(el) {
+            el = W(el);
+            setTimeout(function(){
+                try {
+                    if (el.length > 0) {
+                        el[0].focus();
+                    }
+                }
+                catch(e){}
+            }, 100);
         },
 
         // 创建浏览器历史路由规则
@@ -870,14 +1132,12 @@
                 //[{'key':'inbox/(:any)/(:any)', 'value': 'inbox/$2'}, ]
 
                 TF.Core.Application.subscribe('GlobalRoute', function(uri) {
-                    func(uri.toLowerCase());
+                    func(uri);
                 });
 
                 // 一般这里会错过首次的全局路由事件，所以要手动执行一次
-                var uri = TF.Core.Router.parseUri();
-                uri = [uri.channelName, uri.name, uri.params];
-                uri = uri[1] ? uri.join('/') : uri[0];
-                func(uri.toLowerCase());
+                var uriObject = TF.Core.Router.parseUri();
+                func(uriObject.uri);
             }
         },
 
@@ -908,7 +1168,12 @@
         setLoadingMsg: function(msg) {
             //if (this._isLoadingMsg) return;
             //this._isLoadingMsg = true;
-            //TF.Singleton.page.setLoadingMsg(msg);
+            mentor.Status.setLoadingMsg(msg, this.instance);
+        },
+        unsetLoadingMsg: function(msg) {
+            //if (this._isLoadingMsg) return;
+            //this._isLoadingMsg = true;
+            mentor.Status.unsetLoadingMsg(this.instance);
         },
 
         // 封装组件内容 Request
@@ -932,6 +1197,10 @@
                 delete options.fn;
             }
             mix(ajaxOptions, options, true);
+
+            if (Object.isWrap(ajaxOptions.data) && ajaxOptions.data.attr('tagName').toLowerCase() == 'form') {
+                ajaxOptions.data = ajaxOptions.data.encodeURIForm();
+            }
 
             // 如果已经发送请求，则取消上一个请求
             if (this.requester) {
@@ -960,7 +1229,7 @@
                 result = {'errno': 999, 'errmsg': 'Error!', data: []}; // 内部错误
             }
 
-            var isError = !TF.Core.Config.ajaxDataValidation(result);
+            var isError = !mentor.Ajax.validation(result);
             var args;
 
             if (isError){
@@ -982,12 +1251,24 @@
 
             if (isError && args.message != '') {
                 // 显示错误消息
-                //Iqwer.Class.Page.Instance.setErrorMsg(args.message);
+                mentor.Status.setFailMsg(args.message, this, args);
+//                if (this.win) {
+//                    this.win.setFailMsg(args.message, args.close);
+//                }
+//                else {
+//                    TF.Helper.Page.setFailMsg(args.message);
+//                }
             }
             else {
                 if (Object.isString(args.message) && args.message != '') {
                     // 显示成功消息
-                    //Iqwer.Class.Page.Instance.setSuccessMsg(args.message);
+                    mentor.Status.setSuccMsg(args.message, this, args);
+//                    if (this.win) {
+//                        this.win.setSuccMsg(args.message, args.close === undefined ? false : !args.close);
+//                    }
+//                    else {
+//                        TF.Helper.Page.setSuccMsg(args.message);
+//                    }
                 }
             }
         },
@@ -995,28 +1276,37 @@
         // 静态渲染模板
         renderStaticTemplate: function(name, args) {
             // 支持渲染一批模板
-            name = TF.Helper.Utility.toArray(name);
+            name = toArray(name);
+
+            var html;
 
             name.forEach(function(item){
                 // 根据不同情况取 Target 名
                 if (Object.isString(item)) {
-                    this.query('.TFTarget_' + item).html(baidu.template(this.query('.TFTemplate_' + item).html(), args));
+                    html = this.query('.TFTemplate_' + item).html();
+                    this.query('.TFTarget_' + item).html(mentor.Template.render(html, args));
                 }
                 else if (Object.isObject(item)) {
-                    this.query('.TFTarget_' + item.target).html(baidu.template(this.query('.TFTemplate_' + item.template).html(), args));
+                    html = this.query('.TFTemplate_' + item.template).html();
+                    this.query('.TFTarget_' + item.target).html(mentor.Template.render(html, args));
                 }
             }, this);
         },
 
+        // 取得渲染后的模板内容
+        getRenderedTemplate: function(name, args) {
+            return mentor.Template.render(this.query('.TFTemplate_' + name).html(), args);
+        },
+
         // 动态渲染模板，支持自动分页
-        renderTemplate: function(name, args) {
+        renderTemplate: function(name, args, actionName) {
             if (!name) return;
     //{'template':'xxx', 'target':'xxxx'}
-            //this._setLoadingMsg();
-            var url = TF.Helper.Utility.getComponentUrl(TF.Helper.Utility.getDefaultDataUri(), this.channelName, this.name);
+            //this.setLoadingMsg();
+            var url = TF.Helper.Utility.getComponentUrl(actionName || TF.Helper.Utility.getDefaultDataUri(), this.channelName, this.name);
             var me = this.instance;
 
-            name = TF.Helper.Utility.toArray(name);
+            name = toArray(name);
 
             if (args && args.data) {
                 args.old_data = args.data;
@@ -1030,7 +1320,7 @@
                     //this.pageInitialize.run({'name': name, 'args': args}, me);
                     args.old_fn.call(me, result);
                     if (args.loadingMsg != false) {
-                        //Iqwer.Class.Page.Instance.unsetLoadingMsg();
+                        mentor.Status.unsetLoadingMsg(this.instance);
                     }
                 };
             }
@@ -1039,7 +1329,7 @@
                 args.fn = function(result) {
                     //this.pageInitialize.run({'name': name, 'args': args}, me);
                     if (args.loadingMsg != false) {
-                        //Iqwer.Class.Page.Instance.unsetLoadingMsg();
+                        mentor.Status.unsetLoadingMsg(this.instance);
                     }
                 };
             }
@@ -1079,14 +1369,14 @@
             var waiter = [];
             var w, pos, object;
 
-            template = TF.Helper.Utility.toArray(template);
-            target = TF.Helper.Utility.toArray(target);
+            template = toArray(template);
+            target = toArray(target);
 
             if (url.indexOf("http://") < 0 && url.indexOf("/") != 0) {
                 url = TF.Helper.Utility.siteUrl(url);
             }
 
-            var ajax = new QW.Ajax({
+            var ajaxOptions = {
                 url: url,
                 method: 'get',
                 onerror: function() {
@@ -1156,12 +1446,12 @@
                         result = mix(result, options.addition, true);
                     }
 
-                    if (TF.Core.Config.ajaxDataValidation(result)) {
+                    if (mentor.Ajax.validation(result)) {
                         // 执行成功
                         template.forEach(function(t, i) {
                             object = W(target[i]);
                             try {
-                                object.html(baidu.template(t.html(), result));
+                                object.html(mentor.Template.render(t.html(), result));
                             }
                             catch(e) {
                                 object.html(e);
@@ -1192,8 +1482,10 @@
 
                     //ajax = null;
                 }
-            });
+            };
+            mix(ajaxOptions, options, true);
 
+            var ajax = new QW.Ajax(ajaxOptions);
             ajax.send();
         },
 
@@ -1221,7 +1513,6 @@
             if (el.length > 0) {
                 id = el.attr('id');
                 // 先隐藏除 name 所指定的组件外的其它组件
-                //alert(el.getParent().getChildren().length);
                 el.parentNode().query('.TFComponent').forEach(function(comEl){
                     comEl = W(comEl);
                     if (id != comEl.attr('id')) {
@@ -1255,13 +1546,19 @@
         },
 
         createComponentMgr: function(callback) {
-            return TF.Core.Application.createComponentMgrInstance(callback);
+            return TF.Core.Application.createComponentMgrInstance(false, bind(callback, this.instance));
         },
 
         cancelRequest: function() {
             if (this.requester) {
                 this.requester.cancel();
-                //TF.Singleton.page.unsetLoadingMsg();
+                //mentor.Status.unsetLoadingMsg(this.instance);
+            }
+        },
+
+        cancelRender: function() {
+            if (this.loader) {
+                this.loader.cancel();
             }
         },
 
@@ -1276,6 +1573,7 @@
             this.parentComponentMgr.remove(this.fullName);
 
             try {
+                this.cancelRender();
                 this.cancelRequest();
 
                 // 清除表单验证对象
@@ -1286,6 +1584,83 @@
                 this.instance = null;
             }
             catch (e) {
+            }
+        },
+
+        // 创建常规布局，常规布局包括的能力是自动分页
+        createNormalLayout: function(data) {
+            //[{'name':'模板名', 'fn': '回调函数', 'page': '当前页数'}, ]
+            if (data) {
+                this.layoutType = 'normal';
+                this.layoutData = data;
+            }
+        },
+
+        // 显示常规布局内容
+        showNormalLayout: function(isRefresh, isSetRoute, additional) {
+            if (isSetRoute) {
+                var args = toArray(additional || []);
+                if (this.layoutData.page > 0) {
+                    args.push('p' + this.layoutData.page);
+                }
+                this.setRouterArgs(args);
+            }
+
+            if (isRefresh || this.query('.TFTarget_' + this.layoutData.name).firstChild('*').length == 0) {
+                this.layoutData.fn.call(this.instance, this.layoutData.page);
+            }
+        },
+
+        // 用于设置前进后退的 URI
+        // args 是参数数组
+        // name 是组件名，默认不写则是当前组件
+        setRouterArgs: function(args, name) {
+            var uri = [];
+            uri.push(TF.Helper.Utility.toComponentUriName(name || this.name));
+            args = toArray(args);
+            if (args.length > 0) {
+                uri.push(args.filter(function(item){
+                    return item != '';
+                }).join('/'));
+            }
+
+            // 组成一个可用的URI
+            //channelName/name/params
+
+            //var old = this._getHistoryMgrValues();
+            //if (old[0] == name[0] && old[1] == name[1]) return;
+            TF.Core.Router.go(uri.join('/'));
+            //this.options.HistoryMgr.setValues(name);
+            //Iqwer.Class.Core.Instance.publish('全局历史路由', [name]);
+
+            TF.Core.Application.publish('GlobalRoute', [uri.join('/'), [this.channelName, this.name, args]]);
+        },
+
+        // 取URI参数中的页数，args 为数组
+        getUriPage: function(args) {
+            if (!args) {
+                return 0;
+            }
+
+            args = toArray(args);
+            var pager = args[args.length - 1] || '';
+            if ((/p\d+/).test(pager)) {
+                return pager.slice(1);
+            }
+            else {
+                return 0;
+            }
+        },
+
+        // 验证组件表单
+        validate: function() {
+            var el = this.query('form.js-validation');
+
+            if (el.length > 0) {
+                return QW.Valid.checkAll(el[0]);
+            }
+            else {
+                return true;
             }
         }
 
@@ -1339,9 +1714,8 @@
         // 默认渲染错误回调函数
         RenderError: function(result) {
             //window.location = '#';
-            //TF.Singleton.page.unsetLoadingMsg();
-            //TF.Singleton.page.setErrorMsg(result.error);
-            //this._loaded();
+            //mentor.Status.unsetLoadingMsg(this);
+            //mentor.Status.setFailMsg(result.error, false, this);
         }
     });
 
@@ -1355,8 +1729,6 @@
             subscriptions = new TF.Library.Hash(),
             // 预装载数组
             preload = [],
-            // 预装载时候的 Show 消息数组
-            preloadShow = [],
             // 后台组件关联数组，key 为组件名，value 为组件创建 Options
             backgroundComponents = new TF.Library.Hash(),
             // 后台某组件最后收到的消息，key 为组件名，value 为消息体（消息名+消息参数的数组）
@@ -1382,11 +1754,6 @@
 
         // 最终全部完成
         var completeProgress = function() {
-            preloadShow.forEach(function(item){
-                this.show(item);
-            }, exports);
-            preloadShow.length = 0;
-
             if (isGlobal) {
                 // 广播一个全部组件加载完毕的消息
                 TF.Core.Application.publish('GlobalComponentLoaded');
@@ -1454,10 +1821,14 @@
             add: function(options) {
                 if (isLoading) return;
 
-                if (!this.has(options.name) && !loadedComponents.contains(options.name)) {
-                    length++;
-                    preload.push(options);
-                }
+                options = toArray(options);
+
+                options.forEach(function(item){
+                    if (!this.has(item.name) && !loadedComponents.contains(item.name)) {
+                        length++;
+                        preload.push(item);
+                    }
+                }, this);
 
                 return this;
             },
@@ -1477,14 +1848,14 @@
                 if (components.has(name) || !options) return;
 
                 var fn = bind(function(e) {
-                    //TF.Singleton.page.unsetLoadingMsg();
+                    //mentor.Status.unsetLoadingMsg();
                     lastMessage = backgroundLastMessage.get(name);
                     if (lastMessage) {
                         this.post(name, lastMessage[0], lastMessage[1]);
                     }
                 }, this);
 
-                //TF.Singleton.page.setLoadingMsg();
+                //mentor.Status.unsetLoadingMsg();
                 // 加载组件
                 var obj = new TF.Library.ComponentLoader(options, this);
                 obj.on('complete', fn);
@@ -1501,7 +1872,7 @@
 
             // 投递事件给具体的实例
             post: function(name, msg, args) {
-                name = TF.Helper.Utility.toArray(name);
+                name = toArray(name);
 
                 name.forEach(function(item) {
                     if (components.has(item) && loadedComponents.contains(item)) {
@@ -1528,11 +1899,6 @@
 
             // 显示当前容器中 name 所指定的组件，并且隐藏此容器中其它组件
             show: function(name) {
-                if (isLoading) {
-                    preloadShow.push(name);
-                    return;
-                }
-
                 if (this.has(name)) {
                     this.post(name, 'component-only-show');
                 }
@@ -1592,21 +1958,21 @@
         var addtionRouter = [];
 
         var parse = function(hash) {
-            var bits = hash.match(/tf-([^\/]+)\/?([^\/]*)\/?(.*)/);
+            var bits = hash.match(/tf-([^\/]*)\/?(.*)/);
             var name, params, channelName;
             if (bits) {
-                channelName = bits[1].capitalize();
-                name = bits[2] ? bits[2].camelize().capitalize() : defaultName;
+                channelName = defaultChannelName.capitalize();
+                name = bits[1] ? bits[1].camelize().capitalize() : defaultName;
 
-                params = bits[3].split('/');
+                params = bits[2] ? bits[2].split('/') : [];
             }
             else {
                 channelName = defaultChannelName;
                 name = defaultName;
                 params = [];
             }
-//alert(bits);
-            return {name: name, channelName: channelName, params: params, uri: exports.makeUri(channelName, name, params)};
+
+            return {name: name, channelName: channelName, params: params, uri: exports.makeUri(name, params)};
         };
 
         var callback = function(hash){
@@ -1624,7 +1990,7 @@
             }
             else {
                 // 非法参数
-                window.location = '#tf-' + defaultChannelName.toLowerCase() + '/' + defaultName.toLowerCase();
+                window.location = '#tf-' + defaultName.toLowerCase();
             }
 
             // 额外路由
@@ -1652,7 +2018,7 @@
         };
 
         var exports = {
-            create: function(router, channelName, name) {
+            create: function(channelName, name, router) {
                 addtionRouter = router || addtionRouter;
                 defaultChannelName = channelName || defaultChannelName;
                 defaultName = name || defaultName;
@@ -1668,24 +2034,28 @@
 
             // 解析 hash 中的字符串，取得里面的信息
             parseUri: function(uri) {
-                return parse(uri || location.hash);
+                return parse(uri || top.location.hash);
             },
 
-            makeUri: function(channelName, name, params) {
-                channelName = channelName || '';
+            makeUri: function(name, params) {
                 name = name || '';
                 params = params || [];
 
-                channelName = channelName.toLowerCase();
-                name = name.decamelize().slice(1);
+                name = TF.Helper.Utility.toComponentUriName(name);
                 params = params.join('/');
 
-                return [channelName, name, params].join('/');
+                var result = name;
+
+                if (params) {
+                    result += '/' + decodeURI(params);
+                }
+
+                return result;
             },
 
             go: function(uri) {
                 if (locationHash) {
-                    locationHash.setHash(uri);
+                    locationHash.setHash('tf-' + uri);
                 }
             }
         };
@@ -1708,288 +2078,5 @@
     QW.provide({
         TF: TF
     });
-
-}());
-
-
-// 支持窗体部分
-;(function(){
-    var mix = QW.ObjectH.mix,
-        bind = QW.FunctionH.bind;
-
-    TF.Core.WindowMgr = function() {
-        var defaultOptions = {
-            "wrapId": 'transformers_win',
-            "className": "panel-t1",
-            "title": "标题",
-            "header": '',
-            "body": '',
-            "footer": '',
-            "withClose":true,
-            "withCorner":false,
-            "withCue":false,
-            "withShadow":true,
-            "withBgIframe":false,
-            "keyEsc":false,
-            "withMask":true,
-            "dragable":true,
-            "resizable":false,
-            "posCenter":true,
-            "posAdjust":true
-        };
-
-        var windows = new TF.Library.Hash();
-
-        var disableButton = function(id) {
-            W('#' + id).query('.button').attr('disabled', 'disabled');
-        };
-
-        var enableButton = function(id) {
-            W('#' + id).query('.button').removeAttr('disabled');
-        };
-
-        var windowSys = {
-            clickButton: function(button) {
-                if (button) {
-                    this.button = button;
-                }
-
-                if (!this.disableButton || this.button == 'close') {
-                    // 禁用所有按钮
-                    this.disable();
-
-                    var args = {
-                        close: (this.button != 'ok'),
-                        button: this.button,
-                        enabled: (this.button != 'ok')
-                    };
-
-                    this.instance.sys.postMessage('click-button', args);
-
-                    if (args.enabled) {
-                        this.enable();
-                    }
-
-                    if (args.close) {
-                        this.close();
-                    }
-                }
-            },
-
-            // 关闭按钮
-            disable: function() {
-                this.disableButton = true;
-                disableButton(this.panel.wrapId);
-            },
-
-            // 允许按钮
-            enable: function() {
-                this.disableButton = false;
-                enableButton(this.panel.wrapId);
-            },
-
-            close: function() {
-                if (this.instance) {
-                    if (this.instance.DomDestroy() === false) {
-                        return;
-                    }
-
-                    this.instance.sys.cancelRequest();
-                    this.instance.sys.postMessage('component_destroy');
-                }
-
-                // 清除表单验证
-//                if (this.validation) {
-//                    this.validation.clear();
-//                }
-                this.options.fn(this, this.button);
-                this.instance = null;
-
-                // 先隐藏后销毁
-                if (this.panel) {
-                    this.panel.hide();
-                    this.panel.dispose();
-                }
-            }
-
-        };
-
-        // 构建按钮
-        var makeButton = function(id, buttons, defaultButtons) {
-            // 移除原有关闭按钮
-            W('#' + id + ' span.close').removeNode();
-            // 添加新的关闭按钮
-            W('#' + id).appendChild(W('<span class="button close" data-button="close"></span>')[0]);
-
-            var btns = new TF.Library.Hash(buttons);
-            btns.combine(defaultButtons || {'ok': '确定'});
-            var ft = W('#' + id + ' .ft');
-            var el;
-            btns.forEach(function(value, key){
-                el = W('<button class="button ' + key + '" data-button="' + key + '">' + value + '</button>');
-                ft.appendChild(el);
-            });
-        };
-
-        var bindButtonEvent = function(id, fn) {
-            W('#' + id).delegate('.button', 'click', function(e){
-                var el = W(e.target);
-                if (el.attr('disabled') == 'disabled') {
-                    return;
-                }
-                fn(W(e.target).attr('data-button'));
-            });
-        };
-
-        var getId = function() {
-            return 'transformers_win_' + TF.Helper.Utility.random();
-        };
-
-        var exports = {
-            show: function(options){
-                options = options || {};
-                mix(options, defaultOptions);
-
-                options.wrapId = getId();
-
-                var panel = new QW.BasePanel(options);
-
-                panel.show(null, null, options.width || 300);
-                // 加载组件
-                options.renderTo = '#' + options.wrapId + ' .bd';
-                var mgr = TF.Core.Application.createComponentMgrInstance();
-                var obj = new TF.Library.ComponentLoader(options, mgr);
-                obj.on('complete', function(eventObj){
-
-                    // 借给组件一些窗体管理函数
-                    eventObj.instance.win = {
-                        panel: panel,
-                        instance: eventObj.instance,
-                        options: options
-                    };
-                    mix(eventObj.instance.win, windowSys, true);
-
-                    makeButton(options.wrapId, options.buttons, {'ok': '确定', 'cancel': '取消'});
-                    bindButtonEvent(options.wrapId, function(button){
-                        eventObj.instance.win.clickButton(button);
-                    });
-                });
-                obj.load();
-                // 显示加载中
-            },
-
-            alert: function(title, msg, width, fn, options){
-                options = options || {};
-                mix(options || {}, defaultOptions);
-
-                options.wrapId = getId();
-
-                options.title = title;
-                options.body = '<div class="content">' + msg + '</div>';
-
-                var panel = new QW.BasePanel(options);
-
-                makeButton(options.wrapId, options.buttons || {'ok':''});
-                bindButtonEvent(options.wrapId, function(button){
-                    var args = {
-                        close: true,
-                        enabled: true
-                    };
-
-                    if (Object.isFunction(fn)) {
-                        fn(button, args, panel);
-                    }
-
-                    if (args.enabled) {
-                        enableButton(options.wrapId);
-                    }
-                    else {
-                        disableButton(options.wrapId);
-                    }
-
-                    if (args.close) {
-                        panel.hide();
-                        panel.dispose();
-                    }
-                });
-                panel.show(null, null, width || 300);
-            },
-
-            confirm: function(title, msg, width, fn, options){
-                options = options || {};
-                options.buttons = options.buttons || {'yes':'是', 'no': '否', 'cancel':'取消'};
-                this.alert(title, msg, width, fn, options);
-            },
-
-            prompt: function(title, msg, width, fn, options){
-                options = options || {};
-                mix(options || {}, defaultOptions);
-
-                options.wrapId = getId();
-
-                options.title = title;
-                options.body = '<div class="prompt-content">' + msg + '</div>';
-
-                var el;
-                var tmp = W('<div></div>');
-
-                if (options.multiline) {
-                    el = W(Dom.createElement('textarea', {
-                        'class': options.inputClass || ''
-                    })).css({'width': options.inputCol || '100%', 'height': options.inputRow || '50px'});
-                }
-                else {
-                    el = W(Dom.createElement('input', {
-                        'type': 'text',
-                        'class': options.inputClass || '',
-                        'size': options.inputSize || '10'
-                    })).css({'width': options.inputCol || '100%'});
-                }
-
-                tmp.appendChild(el);
-
-                options.body += '<div class="input">' + tmp.html() + '</div>';
-
-                var panel = new QW.BasePanel(options);
-
-                makeButton(options.wrapId, options.buttons || {'ok':'确定', 'cancel':'取消'});
-                bindButtonEvent(options.wrapId, function(button){
-                    var args = {
-                        close: true,
-                        enabled: true
-                    };
-
-                    if (Object.isFunction(fn)) {
-                        var text = '';
-
-                        if (options.multiline) {
-                            text = W('#' + options.wrapId + ' .bd textarea').val();
-                        }
-                        else {
-                            text = W('#' + options.wrapId + ' .bd input').val();
-                        }
-
-                        fn(button, text, args, panel);
-                    }
-
-                    if (args.enabled) {
-                        enableButton(options.wrapId);
-                    }
-                    else {
-                        disableButton(options.wrapId);
-                    }
-
-                    if (args.close) {
-                        panel.hide();
-                        panel.dispose();
-                    }
-                });
-                panel.show(null, null, width || 300);
-            }
-
-        };
-
-        return exports;
-    }();
 
 }());
