@@ -14,8 +14,8 @@
 ;(function () {
     var TF,
         Transformers = TF = Transformers || {
-        'version': '0.4',
-        'build': '20130201'
+        'version': '0.8.1',
+        'build': '20130403'
     };
 
     var mix = QW.ObjectH.mix,
@@ -28,11 +28,11 @@
     namespace('Helper', TF);
 
     TF.Core.Config = {
-        name: '',
         baseUrl: '/',
-        templateUriPattern: '{$application}/{$channel}/{$name}/view',
-        jsUriPattern: 'resource/js/{$application}/{$channel}/{$name}.js',
-        dataUriPattern: '{$application}/{$channel}/{$name}/{$uri}',
+        resourceVersion: 'ver',
+        templateUriPattern: '{$name.join("-")}-view.html',
+        jsUriPattern: 'resource/js/{$name.join("-")}.js?v={$ver}',
+        dataUriPattern: 'data-{$name.join("-")}-{$uri}.js',
         defaultDataUri: 'model',
 
         // 提供一些和页面展现相关的方法给框架，类似实现一些框架所需要的接口
@@ -55,28 +55,28 @@
                 }
             },
 
-            setSuccMsg: function(msg){
+            setSuccMsg: function(){
                 var mt = TF.Core.Config.mentor;
                 if (mt.Status && isfun(mt.Status.setSuccMsg)){
                     mt.Status.setSuccMsg.apply(mt.Status, arguments);
                 }
             },
 
-            setFailMsg: function(msg){
+            setFailMsg: function(){
                 var mt = TF.Core.Config.mentor;
                 if (mt.Status && isfun(mt.Status.setFailMsg)){
                     mt.Status.setFailMsg.apply(mt.Status, arguments);
                 }
             },
 
-            setWarningMsg: function(msg){
+            setWarningMsg: function(){
                 var mt = TF.Core.Config.mentor;
                 if (mt.Status && isfun(mt.Status.setWarningMsg)){
                     mt.Status.setWarningMsg.apply(mt.Status, arguments);
                 }
             },
 
-            setLoadingMsg: function(msg) {
+            setLoadingMsg: function() {
                 var mt = TF.Core.Config.mentor;
                 if (mt.Status && isfun(mt.Status.setLoadingMsg)){
                     mt.Status.setLoadingMsg.apply(mt.Status, arguments);
@@ -170,35 +170,35 @@
             return TF.Core.Config.name ? TF.Core.Config.name.toLowerCase() + '/' : '';
         },
 
-        getComponentUrl: function(uri, channelName, name) {
+        getComponentUrl: function(uri, name) {
             var pattern = TF.Core.Config.dataUriPattern;
+            var names = TF.Helper.Utility.getComponentNameArray(name);
+
             var str = pattern.tmpl({
-                application: TF.Core.Config.name.toLowerCase(),
-                channel: channelName.toLowerCase(),
-                name: TF.Helper.Utility.toComponentUriName(name, '_'),
+                name: names,
                 uri: uri
             });
 
             return TF.Helper.Utility.baseUrl() + str;
         },
 
-        getComponentViewUrl: function(channelName, name) {
+        getComponentViewUrl: function(name) {
             var pattern = TF.Core.Config.templateUriPattern;
+            var names = TF.Helper.Utility.getComponentNameArray(name);
             var str = pattern.tmpl({
-                application: TF.Core.Config.name.toLowerCase(),
-                channel: channelName.toLowerCase(),
-                name: TF.Helper.Utility.toComponentUriName(name, '_')
+                name: names
             });
 
             return TF.Helper.Utility.baseUrl() + str;
         },
 
-        getComponentJsUrl: function(channelName, name) {
+        getComponentJsUrl: function(name) {
             var pattern = TF.Core.Config.jsUriPattern;
+            var names = TF.Helper.Utility.getComponentNameArray(name);
+
             var str = pattern.tmpl({
-                application: TF.Core.Config.name.toLowerCase(),
-                channel: channelName.toLowerCase(),
-                name: TF.Helper.Utility.toComponentUriName(name)
+                name: names,
+                ver: TF.Core.Config.resourceVersion
             });
 
             return TF.Helper.Utility.baseUrl() + str;
@@ -223,6 +223,19 @@
             return name.replace(/[A-Z]/g, function(a) {
                 return (sep || '-') + a.toLowerCase();
             }).slice(1);
+        },
+
+        getComponentNameArray: function(name) {
+            var result = [];
+            name.replace(/([A-Z][a-z]*)/g, function(a) {
+                result.push(a.toLowerCase());
+            });
+            return result;
+        },
+
+        // 从组件全名取得组件详细名称
+        getComponentName: function(name) {
+            return name;
         }
 
     };
@@ -344,6 +357,7 @@
         this.useIframe = (Browser.ie && (typeof(document.documentMode)=='undefined' || document.documentMode < 8));
         this.state = null;
         this.supports = (('onhashchange' in window) && (typeof(document.documentMode) == 'undefined' || document.documentMode > 7));
+        this.noFireOnce = false;
 
         mix(this.options, options, true);
 
@@ -366,6 +380,10 @@
             if (this.supports) {
                 // The HTML5 way of handling DHTML history...
                 W(window).on('hashchange', function() {
+                    if (self.noFireOnce) {
+                        self.noFireOnce = false;
+                        return;
+                    }
                     self.fire('hashChanged', {hash: self.getHash()});
                 });
             }
@@ -422,7 +440,7 @@
         },
 
         // 不带#号
-        setHash: function(hash) {
+        setHash: function(hash, noFire) {
             if (this.getHash() == hash) {
                 // 如果hash没有变化 则不引发任何事件
                 return;
@@ -431,11 +449,18 @@
             hash = encodeURI(hash);
 
             if (this.supports) {
+                if (noFire) {
+                    this.noFireOnce = true;
+                }
                 top.location.hash = this.prefix + hash || this.prefix;
                 return;
             }
 
             this.setState(hash);
+
+            if (noFire) {
+                return;
+            }
 
             this.fire('hashChanged', {hash: hash});
         },
@@ -583,7 +608,7 @@
         };
         mix(this.options, options, true);
 
-        CustEvent.createEvents(this, ['complete', 'failure']);
+        CustEvent.createEvents(this, ['instanced', 'complete', 'failure']);
 
         // 判断是加载到全局组件管理器，还是私有组件管理器中
         this.componentMgrInstance = componentMgrInstance ? componentMgrInstance : TF.Core.ComponentMgr;
@@ -600,83 +625,129 @@
             this._instanced = false;
             this.fullName = this.options.name;
 
-            var name = TF.Helper.Utility.toComponentUriName(this.options.name).split('-');
-            this.channelName = name[0].capitalize();
-            name[0] = '';
-            this.name = name.join('-').camelize().capitalize();
+            this.name = TF.Helper.Utility.getComponentName(this.options.name);
 
             // 注册到组件管理器
             this.componentMgrInstance.register(this.fullName);
-        }
+        },
 
-        , load: function() {
+        load: function() {
             this._preload();
-        }
+        },
 
-        , _preload: function() {
-            // 创建组件所需的名字空间
-            namespace(this.channelName, TF.Component);
+        _preload: function() {
+//            // 判断是否有 deriveFrom 参数
+//            if (this.options.deriveFrom) {
+//                //
+//            }
 
-            var isLoad = (typeof TF.Component[this.channelName][this.name] == 'undefined' ? false : true);
+            var isLoad = (typeof TF.Component[this.name] != 'undefined');
 
             if (isLoad) {
                 this._createInstance();
             }
             else {
-                loadJs(TF.Helper.Utility.getComponentJsUrl(this.channelName, this.name), bind(function(){
-                    if (typeof TF.Component[this.channelName][this.name] != 'undefined') {
+                QW.loadJs(TF.Helper.Utility.getComponentJsUrl(this.name), bind(function(){
+                    if (typeof TF.Component[this.name] != 'undefined') {
                         // 加载成功
                         this._createInstance();
                     }
                     else {
                         // 加载失败
                         // 应该返回错误，或者记录日志
-                        this.fire('failure', {instance: null, fullName: this.fullName, name: this.name, channelName: this.channelName});
+                        this.fire('failure', {instance: null, fullName: this.fullName, name: this.name});
                     }
                 }, this));
             }
-        }
+        },
 
         // 创建当前内容的名字空间实例
-        , _createInstance: function() {
+        _createInstance: function() {
             try {
-                this._instance = new TF.Component[this.channelName][this.name](this.options);
+                this._instance = new TF.Component[this.name](this.options);
             }
             catch(e) {
-
             }
 
-            // 组件实例化正确才加载内容
-            if (this._instance) {
-                this._instanced = true;
-
-                // 把加载器的配置传递到组件实例的sys空间里
-                mix(this._instance.sys.options, this.options, true);
-
-                this._instance.sys.hidden = this.options.hide;
-                this._instance.sys.fullName = this.fullName;
-                this._instance.sys.name = this.name;
-                this._instance.sys.channelName = this.channelName;
-                // 组件需要知道自己的父级组件管理器是谁
-                this._instance.sys.parentComponentMgr = this.componentMgrInstance;
-
-                // 实例准备就绪
-                this._instance.InstanceReady(this);
-
-                this.componentMgrInstance.loaded(this.fullName, this._instance);
-
-                // 看是否是延迟渲染
-                if (!this.options.lazyRender) {
-                    this._instance.sys.render();
-                }
-
-                this.fire('complete', {instance: this._instance, fullName: this.fullName, name: this.name, channelName: this.channelName});
-            }
-            else
-            {
+            if (!this._instance) {
                 //alert('组件装载出错，请刷新页面。');
-                this.fire('failure', {instance: null, fullName: this.fullName, name: this.name, channelName: this.channelName});
+                this.fire('failure', {instance: null, fullName: this.fullName, name: this.name});
             }
+
+            // 看看组件是否借用其他组件的方法和属性
+            if (this._instance.Mentor) {
+                var viewName = TF.Helper.Utility.getComponentName(this._instance.Mentor.name);
+                this._instance.Mentor.viewName = viewName;
+
+                var isLoad = (typeof TF.Component[viewName] != 'undefined');
+                var me = this;
+
+                if (isLoad) {
+                    this._initInstance(TF.Component[viewName]);
+                }
+                else {
+                    QW.loadJs(TF.Helper.Utility.getComponentJsUrl(viewName), function(){
+                        if (typeof TF.Component[viewName] != 'undefined') {
+                            // 加载成功
+                            me._initInstance(TF.Component[viewName]);
+                        }
+                        else {
+                            me._initInstance();
+                        }
+                    });
+                }
+            }
+            else {
+                this._initInstance();
+            }
+        },
+
+        _initInstance: function(mentorClass) {
+            // 组件实例化正确才加载内容
+            this._instanced = true;
+
+            if (mentorClass) {
+                var me = this;
+                mix(this._instance, mentorClass.prototype, function(des, src, key){
+                    if (TF.Component[me.name].prototype.hasOwnProperty(key)) {
+                        return des;
+                    }
+                    else {
+                        return src;
+                    }
+                });
+
+                // 设置是否使用借用组件的视图
+                if (this._instance.Mentor.useMentorView) {
+                    this._instance.sys.viewName = this._instance.Mentor.viewName;
+                }
+                else if (this._instance.Mentor.useView) {
+                    this._instance.sys.viewName = TF.Helper.Utility.getComponentName(this._instance.Mentor.useView);
+                }
+            }
+
+            // 把加载器的配置传递到组件实例的sys空间里
+            mix(this._instance.sys.options, this.options, true);
+
+            this._instance.sys.hidden = this.options.hide;
+            this._instance.sys.fullName = this.fullName;
+            this._instance.sys.name = this.name;
+            // 组件需要知道自己的父级组件管理器是谁
+            this._instance.sys.parentComponentMgr = this.componentMgrInstance;
+
+            // 实例准备就绪
+            this._instance.InstanceReady(this);
+
+            this.componentMgrInstance.loaded(this.fullName, this._instance);
+
+            this.fire('instanced', {instance: this._instance, fullName: this.fullName, name: this.name});
+
+            // 看是否是延迟渲染
+            if (!this.options.lazyRender) {
+                this._instance.sys.render();
+            }
+
+            this.fire('complete', {instance: this._instance, fullName: this.fullName, name: this.name});
         },
 
         getInstance: function() {
@@ -730,8 +801,16 @@
             var is_continue = true,
                 funcName = msg.camelize();
 
+            // 传递处理过的参数给 Action
+            var filteredArgs = args;
+            switch (msg) {
+                case 'component-route':
+                    filteredArgs = this._filterRouterArgs(args);
+                    break;
+            }
+
             if (this.instance && Object.isFunction(this.instance[funcName + 'ActionBefore'])) {
-                is_continue = this.instance[funcName + 'ActionBefore'].call(this.instance, args);
+                is_continue = this.instance[funcName + 'ActionBefore'].call(this.instance, filteredArgs, args);
             }
 
             if (is_continue === false) {
@@ -741,13 +820,7 @@
             // 系统事件处理
             switch (msg) {
                 case 'component-route':
-                    if (this.instance && Object.isFunction(this.instance['componentRouteAction'])) {
-                        this.instance['componentRouteAction'].call(this.instance, args);
-                    }
-                    else {
-                        this.route(args);
-                    }
-                    return;
+                    this.route(args);
                     break;
 
                 case 'component-render':
@@ -777,12 +850,15 @@
 
             // 把消息派发到组件实例中
             if (this.instance && Object.isFunction(this.instance[funcName + 'Action'])) {
-                this.instance[funcName + 'Action'].call(this.instance, args);
+                this.instance[funcName + 'Action'].call(this.instance, filteredArgs, args);
             }
         },
 
+        // 系统路由处理函数
         route: function(args) {
             if (this.layoutType == 'normal') {
+                this.onlyShow();
+
                 if (args) {
                     // 传递页数给 fn 函数
                     this.layoutData.page = this.getUriPage(args);
@@ -791,41 +867,69 @@
                     this.layoutData.page = 0;
                 }
 
-                this.showNormalLayout(true, false);
+                this.renderNormalLayout();
+            }
+            else if (this.layoutType == 'tab') {
+                this.onlyShow();
+
+                if (args) {
+                    var index = this.layoutData.tabs.get(this.getUriTab(args)) || 0;
+
+                    this.layoutData.items[index].page = this.getUriPage(args);
+
+                    this.layoutData.tab.switchTo(index);
+                }
+                else {
+                    this.layoutData.items[0].page = 0;
+                    this.layoutData.tab.switchTo(0);
+                }
+
+                this.renderTabLayout();
             }
             else {
                 this.onlyShow(args);
             }
+        },
 
-//          else if (this.layoutType == 'tabs') {
-//              this._force_refresh = true;
-//              this._no_set_history = true;
-//
-//              if (args)
-//              {
-//                  var action = args.split('/');
-//
-//                  var index = this._tab_items_index.get(action[0]) || 0;
-//
-//                  // 传递页数给 fn 函数
-//                  //this._tab_items[this._tab_items_index.get(action[0])].fn(this._getHistoryMgrPage(args));
-//
-//                  this._tab_items[index].page = this._getHistoryMgrPage(args);
-//
-//                  this._tab.show(index);
-//              }
-//              else
-//              {
-//                  this._tab_items[0].page = 0
-//                  this._tab.show(0);
-//              }
-//
-//              this._force_refresh = false;
-//              this._no_set_history = false;
-//          }
+        _filterRouterArgs: function(args) {
+            if (this.layoutType == 'normal') {
+                // 取最后一个参数，测试是否为页数
+                var pager = args[args.length - 1] || '';
+                if ((/p\d+/).test(pager)) {
+                    return args.slice(0, -1);
+                }
+                else {
+                    return args.slice(0);
+                }
+            }
+            else if (this.layoutType == 'tab') {
+                var newArgs
+
+                // 取最后一个参数，测试是否为页数
+                var pager = args[args.length - 1] || '';
+                if ((/p\d+/).test(pager)) {
+                    newArgs = args.slice(0, -1);
+                }
+                else {
+                    newArgs = args.slice(0);
+                }
+
+                // 取第一个参数，测试是否为tab名
+                var tab = newArgs[0] || '';
+                if ((/tab-.+/).test(tab)) {
+                    return newArgs.slice(1);
+                }
+                else {
+                    return newArgs.slice(0);
+                }
+            }
+            else {
+                return args;
+            }
 
         },
 
+        // 渲染组件
         render: function() {
             if (this.rendering) {
                 return;
@@ -861,10 +965,15 @@
         // 装载组件模板
         _loadContent: function() {
             if (this.options.url == '') {
-                this.options.url = TF.Helper.Utility.getComponentViewUrl(this.channelName, this.name);
+                this.options.url = TF.Helper.Utility.getComponentViewUrl(this.viewName || this.name);
             }
-            else if (this.options.url.indexOf("http://") < 0) {
+            else if (this.options.url.indexOf("http:/"+"/") < 0) {
                 this.options.url = TF.Helper.Utility.siteUrl(this.options.url);
+            }
+
+            if (!this.options.hasCache) {
+                this.options.data = this.options.data || {};
+                this.options.data['_reqno'] = TF.Helper.Utility.random();
             }
 
             if (!this.loader) {
@@ -875,7 +984,6 @@
                     timeout: 10000,
                     onsucceed: bind(this._loadComplete, this),
                     onerror: bind(function() {
-
                         //this.loadError('4. Ajax Error!');
                     }, this)
                 });
@@ -884,7 +992,9 @@
             this.loader.send();
         },
 
-        _loadComplete: function(ajaxEvent) {;
+        _loadComplete: function(ajaxEvent) {
+            // TODO: 这里有BUG
+
             // 如果是取消的请求，则什么也不做，我们只关心真正请求回来的数据，而不关心请求的状态
             if (ajaxEvent.target.state == QW.Ajax.STATE_CANCEL) {
                 return;
@@ -896,7 +1006,7 @@
 
             var response, responseTree;
 
-            response = ajaxEvent.target.requester.responseText;
+            response = ajaxEvent.responseText;
 
             if (Object.isString(response)) {
                 // 解决 IE 下 innerHTML 不能直接设置 script 的问题
@@ -951,48 +1061,56 @@
                 this.query().attr('data-tf-component', this.fullName);
 
                 // 判断是否是客户端渲染
-                var template = this.query('script[class~=TFTemplate]');
-                var data = this.query('script[class~=TFData]');
+                var template = this.query('script.TFTemplate');
+                var data = this.query('script.TFData');
 
-                if (template.length > 0 && data.length > 0) {
-                    // 是客户端渲染，执行模板操作
-                    var obj = null;
+                var obj = null;
+
+                if (data.length > 0) {
                     try {
                         obj = QW.JSON.parse(data.html());
                     } catch (e) {}
-                    this.query().html(mentor.Template.render(template.html(), {'ComponentData': obj}));
-                    this.instance.options['templateData'] = obj;
                 }
 
+                if (obj && template.length > 0) {
+                    // 是客户端渲染，执行模板操作
+                    this.query().html(mentor.Template.render(template.html(), {'ComponentData': obj}));
+                }
+
+                this.instance.options['TFData'] = obj;
+
                 // 自动提取页面中的 options 值
-                var options = this.query('[class~=options]');
+                var options = this.query('.js-options');
                 var name, tag;
                 options.forEach(function(e){
+                    e = W(e);
                     name = e.attr('name');
                     tag = e.attr('tagName').toLowerCase();
                     if (tag == 'input' || tag == 'textarea') {
-                        this.instance.options[name] = e.attr('value');
+                        this.instance.options[name] = e.val();
                     }
                     else {
-                        this.instance.options[name] = e.attr('text');
+                        this.instance.options[name] = e.html();
                     }
                 }, this);
 
-                this.instance.fire('complete', {instance: this.instance, fullName: this.fullName, name: this.name, channelName: this.channelName});
+                this.instance.fire('complete', {instance: this.instance, fullName: this.fullName, name: this.name});
 
                 // 页面全部装载完成！
                 if (this.refreshing) {
                     this.instance.DomRefreshReady();
-                    this.instance.fire('refreshReady', {instance: this.instance, fullName: this.fullName, name: this.name, channelName: this.channelName});
+                    this.instance.fire('refreshReady', {instance: this.instance, fullName: this.fullName, name: this.name});
                 }
                 else {
                     // 处理事件委托绑定
+                    this._delegateJsEvent();
                     this._delegateJsAction();
                     this._delegateEvent(this.instance.Events);
                     this._setDefaultSubmit();
-                    this._setDefaultFocus();
 
                     this.instance.DomReady();
+
+                    this._setDefaultFocus();
 
                     // 渲染完毕
                     this.rendered = true;
@@ -1007,11 +1125,11 @@
                         this.lastMessage = null;
                     }
 
-                    this.instance.fire('ready', {instance: this.instance, fullName: this.fullName, name: this.name, channelName: this.channelName});
+                    this.instance.fire('ready', {instance: this.instance, fullName: this.fullName, name: this.name});
                 }
             }
             else {
-                this.instance.fire('failure', {instance: this.instance, fullName: this.fullName, name: this.name, channelName: this.channelName});
+                this.instance.fire('failure', {instance: this.instance, fullName: this.fullName, name: this.name});
             }
 
             this.rendering = false;
@@ -1031,25 +1149,88 @@
                 return;
             }
             var value;
+            var me = this;
             for (var key in configs) {
                 value = configs[key];
                 if (Object.isFunction(value)) {
                     value = {"click": value};
                 }
                 for (var type in value) {
-                    this.topElement.delegate(key, type, bind(value[type], this.instance));
+                    this.topElement.delegate(key, type, (function(e){
+                        var func = value[type];
+                        if (Object.isString(func)) {
+                            func = me.instance[func];
+                        }
+                        return function(ev) {
+                            return func.call(this, ev, me.instance);
+                        };
+                    })());
                 }
             }
         },
 
         _delegateJsAction: function(){
-            this.topElement.delegate('.js-action', 'click', bind(function(e){
-                if (e.target.tagName.toLowerCase() == 'a') {
+            var me = this;
+            this.topElement.delegate('.js-action', 'click', function(e){
+                if (this.tagName.toLowerCase() == 'a') {
                     e.preventDefault();
                 }
-                var action = W(e.target).attr('data-action');
-                this.postMessage(action, {event: e});
-            }, this));
+                var args = {};
+                var action = W(this).attr('data-action') || '';
+
+                // 解析参数
+                var match = /(.*?)\((.*)\)/.exec(action);
+                if (match) {
+                    action = match[1].trim();
+                    if (match[2] != '') {
+                        args = match[2].evalExp();
+                    }
+                }
+
+                if (Object.isObject(args)) {
+                    args.__event = e;
+                    args.__element = this;
+                }
+
+                me.postMessage(action, args);
+            });
+        },
+
+        _delegateJsEvent: function(){
+            var me = this;
+            this.topElement.delegate('.js-event', 'click', function(e){
+                if (this.tagName.toLowerCase() == 'a') {
+                    e.preventDefault();
+                }
+                // 由于单击label标签事件会冒泡两次，所以过滤掉label产生的事件
+                // <div><label><input ...></label>test</div>
+                // TODO: 这里可能不需要太智能的帮用户过滤
+                if (e.target.tagName.toLowerCase() == 'label') {
+                    return;
+                }
+
+                //console.log(me.templateData);
+                //console.log(W(this).parentNode('.js-bind'));
+
+                var el = W(this);
+                var bindingElement = el.hasClass('js-bind') ? el : el.parentNode('.js-bind');
+                var data = null;
+                var binding = '';
+
+                if (bindingElement.length > 0) {
+                    // 找到了绑定数据的DOM节点
+                    // 解析绑定数据
+                    binding = bindingElement.attr('data-bind') || 'null';
+                    data = ('opts.' + binding).evalExp(me.templateData);
+                }
+                //console.log(data);
+                e.__data = data;
+
+                var eventName = W(this).attr('data-event').camelize();
+                if (me.instance && Object.isFunction(me.instance[eventName + 'Event'])) {
+                    return me.instance[eventName + 'Event'].call(this, e, me.instance);
+                }
+            });
         },
 
         // 设置默认按钮
@@ -1061,7 +1242,10 @@
                 form.un('submit');
                 form.on('submit', function(event) {
                     event.preventDefault();
-                    form.query('button.js-default').first().fire('click');
+                    var f = form.query('button.js-default').first();
+                    if (f) {
+                        f.fire('click');
+                    }
                 });
                 // 如果没有 type=submit 的按钮则添加一个
                 if (form.query('button.js-default').attr('type') != 'submit') {
@@ -1073,21 +1257,37 @@
         _setDefaultFocus: function() {
             if (this.isHidden()) return;
 
-            var form = this.query('form[class~=js-focus]');
+            var form = this.query('form.js-focus');
             if (form.length > 0) {
-                var first = form.query('input[type=text]');
-                if (first.length > 0) {
-                    first.attr('autocomplete', 'off');
-                    this.setFocus(first);
+                var first = null;
+                var el, tag;
+                for (var i = 0, len = form[0].elements.length; i < len; i++) {
+                    el = W(form[0].elements[i]);
+                    tag = el.attr('tagName').toLowerCase();
+
+                    if (tag == 'input' && el.attr('type') == 'text' && !el[0].readOnly && el.isVisible()) {
+                        first = el;
+                        break;
+                    }
+                    else if (tag == 'textarea' && !el[0].readOnly && el.isVisible()) {
+                        first = el;
+                        break;
+                    }
                 }
-                else {
-                    first = form.query('textarea');
+
+                if (first && first.length > 0) {
+                    first.attr('autocomplete', 'off');
                     this.setFocus(first);
                 }
             }
         },
 
         setFocus: function(el) {
+            if (!el) {
+                this._setDefaultFocus();
+                return;
+            }
+
             el = W(el);
             setTimeout(function(){
                 try {
@@ -1096,10 +1296,10 @@
                     }
                 }
                 catch(e){}
-            }, 100);
+            }, 200);
         },
 
-        // 创建浏览器历史路由规则
+        // 创建组件内部路由规则
         createRouter: function(routes, fn, scope) {
             if (routes) {
                 var routerItems = routes || [];
@@ -1152,7 +1352,7 @@
 
         _setTopElement: function(el, prefix) {
             prefix = prefix || 'transformers_gen';
-            this.topElement = W(el).attr('id', prefix + '_' + TF.Helper.Utility.random());
+            this.topElement = W(el).attr('id', prefix + '_' + TF.Helper.Utility.random()).addClass('g-component-' + TF.Helper.Utility.toComponentUriName(this.fullName));
         },
         _unsetTopElement: function() {
             if (this.topElement && this.topElement.length > 0)
@@ -1163,23 +1363,33 @@
         },
         // 取自己的组件名
         getComponentName: function() {
-            //return T.string.capitalize(this._channelName) + T.string.capitalize(T.string.camelCase(this._name.replace(/_/g, '-')));
+            return this.name;
         },
         setLoadingMsg: function(msg) {
             //if (this._isLoadingMsg) return;
             //this._isLoadingMsg = true;
             mentor.Status.setLoadingMsg(msg, this.instance);
         },
-        unsetLoadingMsg: function(msg) {
+        unsetLoadingMsg: function() {
             //if (this._isLoadingMsg) return;
             //this._isLoadingMsg = true;
             mentor.Status.unsetLoadingMsg(this.instance);
+        },
+        setSuccMsg: function(msg) {
+            mentor.Status.setSuccMsg(msg, this.instance, {});
+        },
+        setFailMsg: function(msg) {
+            mentor.Status.setFailMsg(msg, this.instance, {});
+        },
+
+        getUrl: function(uri) {
+            return TF.Helper.Utility.getComponentUrl(uri || '', this.name);
         },
 
         // 封装组件内容 Request
         send: function(url, options) {
             if (url.indexOf("/") < 0) {
-                url = TF.Helper.Utility.getComponentUrl(url, this.channelName, this.name);
+                url = this.getUrl(url);
             }
             else {
                 url = TF.Helper.Utility.siteUrl(url.slice(1));
@@ -1193,7 +1403,7 @@
             };
             options = options || {};
             if (Object.isFunction(options.fn)) {
-                options.TFCallback = options.fn;
+                options.__TFCallback = options.fn;
                 delete options.fn;
             }
             mix(ajaxOptions, options, true);
@@ -1202,23 +1412,37 @@
                 ajaxOptions.data = ajaxOptions.data.encodeURIForm();
             }
 
+            if (!ajaxOptions.hasCache && ajaxOptions.method == 'get') {
+                ajaxOptions.data = ajaxOptions.data || {};
+                ajaxOptions.data['_reqno'] = TF.Helper.Utility.random();
+            }
+
             // 如果已经发送请求，则取消上一个请求
             if (this.requester) {
                 this.requester.cancel();
             }
 
             this.requester = new QW.Ajax(ajaxOptions);
+
+            if (options.loadingMsg !== false) {
+                this.setLoadingMsg(options.loadingMsg);
+            }
+
             this.requester.send();
         },
 
         // 装载完成
         _sendComplete: function(ajaxEvent) {
+            if (ajaxEvent.target.loadingMsg !== false) {
+                this.sys.unsetLoadingMsg();
+            }
+
             // 如果是取消的请求，则什么也不做，我们只关心真正请求回来的数据，而不关心请求的状态
             if (ajaxEvent.target.state == QW.Ajax.STATE_CANCEL) {
                 return;
             }
 
-            var response = ajaxEvent.target.requester.responseText;
+            var response = ajaxEvent.responseText;
             var result = null;
 
             try {
@@ -1245,30 +1469,18 @@
                 }, true);
             }
 
-            if (Object.isFunction(ajaxEvent.target.TFCallback)) {
-                ajaxEvent.target.TFCallback.call(this, !isError, args);
+            if (Object.isFunction(ajaxEvent.target.__TFCallback)) {
+                ajaxEvent.target.__TFCallback.call(this, !isError, args);
             }
 
-            if (isError && args.message != '') {
+            if (isError) {
                 // 显示错误消息
                 mentor.Status.setFailMsg(args.message, this, args);
-//                if (this.win) {
-//                    this.win.setFailMsg(args.message, args.close);
-//                }
-//                else {
-//                    TF.Helper.Page.setFailMsg(args.message);
-//                }
             }
             else {
-                if (Object.isString(args.message) && args.message != '') {
+                if (Object.isString(args.message)) {
                     // 显示成功消息
                     mentor.Status.setSuccMsg(args.message, this, args);
-//                    if (this.win) {
-//                        this.win.setSuccMsg(args.message, args.close === undefined ? false : !args.close);
-//                    }
-//                    else {
-//                        TF.Helper.Page.setSuccMsg(args.message);
-//                    }
                 }
             }
         },
@@ -1283,28 +1495,35 @@
             name.forEach(function(item){
                 // 根据不同情况取 Target 名
                 if (Object.isString(item)) {
-                    html = this.query('.TFTemplate_' + item).html();
-                    this.query('.TFTarget_' + item).html(mentor.Template.render(html, args));
+                    html = this.query('.TFTemplate-' + item).html();
+                    this.query('.TFTarget-' + item).html(mentor.Template.render(html, args || {}));
                 }
                 else if (Object.isObject(item)) {
-                    html = this.query('.TFTemplate_' + item.template).html();
-                    this.query('.TFTarget_' + item.target).html(mentor.Template.render(html, args));
+                    html = this.query('.TFTemplate-' + item.template).html();
+                    this.query('.TFTarget-' + item.target).html(mentor.Template.render(html, args || {}));
                 }
             }, this);
+
+            this.templateData[name[0]] = args || {};
         },
 
         // 取得渲染后的模板内容
         getRenderedTemplate: function(name, args) {
-            return mentor.Template.render(this.query('.TFTemplate_' + name).html(), args);
+            return mentor.Template.render(this.query('.TFTemplate-' + name).html(), args || {});
         },
 
         // 动态渲染模板，支持自动分页
         renderTemplate: function(name, args, actionName) {
             if (!name) return;
-    //{'template':'xxx', 'target':'xxxx'}
-            //this.setLoadingMsg();
-            var url = TF.Helper.Utility.getComponentUrl(actionName || TF.Helper.Utility.getDefaultDataUri(), this.channelName, this.name);
-            var me = this.instance;
+            //{'template':'xxx', 'target':'xxxx'}
+            if (!args) args = {};
+
+            if (args.loadingMsg !== false) {
+                this.setLoadingMsg(args.loadingMsg);
+            }
+
+            var url = this.getUrl(actionName || TF.Helper.Utility.getDefaultDataUri());
+            var me = this;
 
             name = toArray(name);
 
@@ -1313,23 +1532,22 @@
             }
 
             // 自动绑定到 this
-            if (args && args.fn) {
+            if (args.fn) {
                 args.old_fn = args.fn;
                 args.fn = null;
                 args.fn = function(result) {
-                    //this.pageInitialize.run({'name': name, 'args': args}, me);
-                    args.old_fn.call(me, result);
-                    if (args.loadingMsg != false) {
-                        mentor.Status.unsetLoadingMsg(this.instance);
+                    me._pageInitialize(name, args);
+                    args.old_fn.call(me.instance, result);
+                    if (args.loadingMsg !== false) {
+                        me.unsetLoadingMsg();
                     }
                 };
             }
             else {
-                if (!args) args = {};
                 args.fn = function(result) {
-                    //this.pageInitialize.run({'name': name, 'args': args}, me);
-                    if (args.loadingMsg != false) {
-                        mentor.Status.unsetLoadingMsg(this.instance);
+                    me._pageInitialize(name, args);
+                    if (args.loadingMsg !== false) {
+                        me.unsetLoadingMsg();
                     }
                 };
             }
@@ -1352,47 +1570,48 @@
             // 支持渲染一批模板
             name.forEach(function(item){
                 if (Object.isString(item)) {
-                    template.push(this.query('.TFTemplate_' + item));
-                    target.push(this.query('.TFTarget_' + item));
+                    template.push(this.query('.TFTemplate-' + item));
+                    target.push(this.query('.TFTarget-' + item));
                 }
                 else if (Object.isObject(item)) {
-                    template.push(this.query('.TFTemplate_' + item.template));
-                    target.push(this.query('.TFTarget_' + item.target));
+                    template.push(this.query('.TFTemplate-' + item.template));
+                    target.push(this.query('.TFTarget-' + item.target));
                 }
             }, this);
 
-            this._renderAjaxTemplate(template, target, url, mix({'fn_error': bind(this.instance.RenderError, this.instance)}, args));
-        },
+            mix(args, {
+                'errorFunc': bind(function(){
+                    if (args.loadingMsg !== false) {
+                        this.sys.unsetLoadingMsg();
+                    }
+                    this.RenderError();
+                }, me.instance)
+            });
 
-        // ajax 模版渲染
-        _renderAjaxTemplate: function(template, target, url, options) {
-            var waiter = [];
+            // ajax 模版渲染
+            //console.info(name);
+            //var waiter = [];
             var w, pos, object;
 
-            template = toArray(template);
-            target = toArray(target);
-
-            if (url.indexOf("http://") < 0 && url.indexOf("/") != 0) {
-                url = TF.Helper.Utility.siteUrl(url);
-            }
+//            if (url.indexOf("http://") < 0 && url.indexOf('/') != 0) {
+//                url = TF.Helper.Utility.siteUrl(url);
+//            }
 
             var ajaxOptions = {
                 url: url,
                 method: 'get',
+                oncancel: function(){
+                    if (args.loadingMsg !== false) {
+                        me.unsetLoadingMsg();
+                    }
+                },
                 onerror: function() {
-//                    (function() {
-//                        try
-//                        {
-//                            // 重试
-//                            TrimPath.load(template, target, url, options);
-//                        }
-//                        catch (e)
-//                        {
-//                        }
-//                    }).delay(500);
+                    if (args.loadingMsg !== false) {
+                        me.unsetLoadingMsg();
+                    }
                 },
                 onsucceed: function(ajaxEvent) {
-                    var response = ajaxEvent.target.requester.responseText;
+                    var response = ajaxEvent.responseText;
                     var result = null;
 
                     try {
@@ -1414,36 +1633,24 @@
                     }
 
                     // 数据过滤器，在这里可以进行一些显示前的处理。
-                    if (result && typeof(options) != 'undefined' && Object.isFunction(options.filter)) {
-                        var temp = options.filter(result);
+                    if (result && typeof(args) != 'undefined' && Object.isFunction(args.filter)) {
+                        var temp = args.filter(result);
 
                         if (Object.isObject(temp)) {
-                            result = mix(result, temp);
+                            mix(result, temp);
                         }
                     }
 
                     if (!result) {
                         // 清理
                         //ajax = null;
-                        result = null;
-
-//                        (function() {
-//                            try
-//                            {
-//                                // 重试
-//                                TrimPath.load(template, target, url, options);
-//                            }
-//                            catch (e)
-//                            {
-//                            }
-//                        }).delay(500);
-
-                        return;
+                        result = {};
+                        //return;
                     }
 
                     // 如果有附加数据 addition，则添加到 result 对象中
-                    if (options.addition) {
-                        result = mix(result, options.addition, true);
+                    if (args.addition) {
+                        mix(result, args.addition, true);
                     }
 
                     if (mentor.Ajax.validation(result)) {
@@ -1458,20 +1665,14 @@
                             }
                         });
 
-                        if (typeof(options) != 'undefined' && Object.isFunction(options.fn)) {
-                            options.fn(result);
+                        if (typeof(args) != 'undefined' && Object.isFunction(args.fn)) {
+                            args.fn(result);
                         }
                     }
                     else {
                         // 执行失败
-                        // 如果用户登陆信息验证失败，立即刷新以便重新登陆
-//                        if (result.errno == 403) {
-//                            //window.location.reload();
-//                            return;
-//                        }
-
-                        if (typeof(options) != 'undefined' && Object.isFunction(options.fn_error)) {
-                            options.fn_error(result);
+                        if (typeof(args) != 'undefined' && Object.isFunction(args.errorFunc)) {
+                            args.errorFunc(result);
                         }
                         else {
                             template.forEach(function(t, i){
@@ -1480,13 +1681,90 @@
                         }
                     }
 
+                    me.templateData[name[0]] = result;
                     //ajax = null;
                 }
             };
-            mix(ajaxOptions, options, true);
+            mix(ajaxOptions, args, true);
 
-            var ajax = new QW.Ajax(ajaxOptions);
-            ajax.send();
+            if (!ajaxOptions.hasCache && ajaxOptions.method == 'get') {
+                ajaxOptions.data = ajaxOptions.data || {};
+                ajaxOptions.data['_reqno'] = TF.Helper.Utility.random();
+            }
+
+            // 如果已经发送请求，则取消上一个请求
+            var currentRequester = this.templateRequester.get(name.join());
+            if (currentRequester) {
+                currentRequester.cancel();
+            }
+
+            currentRequester = new QW.Ajax(ajaxOptions);
+            currentRequester.send();
+
+            this.templateRequester.set(name.join(), currentRequester);
+        },
+
+        // 默认的翻页功能初始化函数
+        _pageInitialize: function(name, args) {
+            var target;
+            var me = this;
+            name = toArray(name);
+            name.forEach(function(item, index){
+                // 根据不同情况取 Target 名
+                if (Object.isString(item)) {
+                    target = item;
+                }
+                else if (Object.isPlainObject(item)) {
+                    target = item.target;
+                }
+                me.query('.TFTarget-' + target + ' .ComponentPager').delegate('a', 'click', function(e){
+                    e.preventDefault();
+
+                    //me.setLoadingMsg();
+
+                    args.fn = null;
+                    args.fn = args.old_fn ? args.old_fn : null;
+                    args.data = args.old_data ? args.old_data : null;
+                    page = W(this).attr('data-page');
+
+                    me._pageHandler(name[index], page, args, index);
+                });
+            });
+        },
+
+        // 默认的翻页处理器
+        _pageHandler: function(name, page, args, index) {
+            // 添加模板名、当前页等参数
+            if (Object.isString(name)) {
+                args.pageData = 'component_template=' + name;
+            }
+            else if (Object.isPlainObject(name)) {
+                args.pageData = 'component_template=' + name.template + '&component_target=' + name.target;
+            }
+            args.pageData += '&component_page=' + page;
+            args.page = page;
+            this.renderTemplate(name, args);
+
+            // 设置当前标签的当前页数
+            if (this.layoutType == 'normal') {
+                this.layoutData.page = page;
+            }
+            else if (this.layoutType == 'tab') {
+                this.layoutData.items[this.layoutData.tabs.get(name)].page = page;
+            }
+
+            // 处理前进后退
+            if (this.layoutType) {
+                var values = TF.Core.Router.parseUri().params;
+                if (/p\d+/.test(values[values.length - 1])) {
+                    values[values.length - 1] = 'p' + page;
+                }
+                else {
+                    values[values.length] = 'p' + page;
+                }
+
+                this.setRouterArgs(values);
+            }
         },
 
         // 显示组件
@@ -1496,6 +1774,7 @@
                 return;
             }
             this.topElement.show();
+            this._setDefaultFocus();
         },
 
         // 在当前容器下只显示自己
@@ -1597,8 +1876,9 @@
         },
 
         // 显示常规布局内容
-        showNormalLayout: function(isRefresh, isSetRoute, additional) {
-            if (isSetRoute) {
+        renderNormalLayout: function(isSetRouter, additional, notRefresh) {
+
+            if (isSetRouter) {
                 var args = toArray(additional || []);
                 if (this.layoutData.page > 0) {
                     args.push('p' + this.layoutData.page);
@@ -1606,9 +1886,95 @@
                 this.setRouterArgs(args);
             }
 
-            if (isRefresh || this.query('.TFTarget_' + this.layoutData.name).firstChild('*').length == 0) {
+            if (!notRefresh || this.query('.TFTarget-' + this.layoutData.name).firstChild('*').length == 0) {
                 this.layoutData.fn.call(this.instance, this.layoutData.page);
             }
+        },
+
+        resetNormalLayoutPage: function() {
+            this.layoutData.page = 0;
+        },
+
+        createTabLayout: function(data, initPanel, cls) {
+            //[{'name':'mime', 'fn': '', 'page': '0'}, ]
+            var me = this;
+
+            if (!data) {
+                return;
+            }
+
+            this.layoutType = 'tab';
+            this.layoutData = {
+                tabs: new TF.Library.Hash(),
+                items: data
+            };
+
+            data.forEach(function(item, index){
+                me.layoutData.tabs.set(item.name, index);
+            });
+
+            this.layoutData.tab = new QW.TabView(this.query(cls || ''), {
+                tabSelector: '.le-tabs li',
+                viewSelector: '.views .view-item',
+                selectedClass: 'active',
+                selectedViewClass: 'active'
+            });
+            // 重写 switchToItem 方法，以实现控制tab切换
+            this.layoutData.tab.switchToItem = function(itemObj) {
+                var index = QW.ArrayH.indexOf(this.items, itemObj);
+                var lastIndex = this.selectedIndex;
+
+                this.switchTo(index);
+
+                if (lastIndex != index) {
+                    me.renderTabLayout(true, null, true);
+                }
+            };
+
+            if (initPanel) {
+                this.layoutData.tab.switchTo(initPanel);
+            }
+        },
+
+        // 显示 Tab 布局内容
+        renderTabLayout: function(isSetRouter, additional, notRefresh) {
+            var index = this.layoutData.tab.selectedIndex;
+
+            if (isSetRouter) {
+                var values = ['tab-' + this.layoutData.items[index].name];
+
+                var args = TF.Core.Router.parseUri().params;
+                if (/p\d+/.test(args[args.length - 1])) {
+                    args = args.slice(0, -1);
+                }
+                if (/tab-.+/.test(args[0])) {
+                    args = args.slice(1);
+                }
+
+                values.push(args);
+                values.push(additional || []);
+                values.push(this.layoutData.items[index].page > 0 ? 'p' + this.layoutData.items[index].page : '');
+
+                this.setRouterArgs(values.expand(true));
+            }
+
+            if (!notRefresh || W(this.layoutData.tab.views[index]).query('.TFTarget-' + this.layoutData.items[index].name).firstChild('*').length == 0) {
+                this.layoutData.items[index].fn.call(this.instance, this.layoutData.items[index].page);
+            }
+        },
+
+        resetTabLayoutPage: function() {
+            var index = this.layoutData.tab.selectedIndex;
+            this.layoutData.items[index].page = 0;
+        },
+
+        getCurrentTab: function() {
+            var index = this.layoutData.tab.selectedIndex;
+
+            if (index < 0) {
+                return W([]);
+            }
+            return W(this.layoutData.tab.views[index]);
         },
 
         // 用于设置前进后退的 URI
@@ -1629,11 +1995,11 @@
 
             //var old = this._getHistoryMgrValues();
             //if (old[0] == name[0] && old[1] == name[1]) return;
-            TF.Core.Router.go(uri.join('/'));
+            TF.Core.Router.setUri(uri.join('/'));
             //this.options.HistoryMgr.setValues(name);
             //Iqwer.Class.Core.Instance.publish('全局历史路由', [name]);
 
-            TF.Core.Application.publish('GlobalRoute', [uri.join('/'), [this.channelName, this.name, args]]);
+            TF.Core.Application.publish('GlobalRoute', [uri.join('/'), [this.name, args]]);
         },
 
         // 取URI参数中的页数，args 为数组
@@ -1649,6 +2015,24 @@
             }
             else {
                 return 0;
+            }
+        },
+
+        // 取URI参数中的tab名，args 为数组
+        getUriTab: function(args) {
+            var defaultName = this.layoutData.items[0].name;
+
+            if (!args) {
+                return defaultName;
+            }
+
+            args = toArray(args);
+            var tab = args[0] || '';
+            if ((/tab-.+/).test(tab)) {
+                return tab.slice(4);
+            }
+            else {
+                return defaultName;
             }
         },
 
@@ -1675,10 +2059,12 @@
             // 此选项主要从加载器mix过来，以确定如何加载组件自身
             options: {},
             name: '', // 组件名称，小写字母
-            channelName: '',  // 组件 栏目 名称，小写字母
             rendered: false,
             refreshing: false,
-            hidden: false
+            hidden: false,
+            // 模板请求实例
+            templateRequester: new TF.Library.Hash(),
+            templateData: {}
         };
         mix(this.sys, componentSys);
 
@@ -1690,7 +2076,6 @@
     };
     mix(TF.Component.Default.prototype, {
         initialize: function(options) {
-            //this._first_load = this.options._needLoading ? true : false;
             //this._isLoadingMsg = false;
         },
 
@@ -1768,13 +2153,22 @@
         var exports = {
             // 创建组件
             create: function(data) {
-                var superclass = data.Extends || TF.Component.Default
-
-                delete data['Extends'];
+                var superclass = TF.Component.Default
 
                 var component = function(){
+
                     // 执行父类构造函数
                     superclass.apply(this, arguments);
+
+                    // 从原型中拷贝普通变量到实例中
+                    for (var key in component.prototype) {
+                        if (component.prototype.hasOwnProperty(key)) {
+                            if (Object.isPlainObject(component.prototype[key])) {
+                                this[key] = {};
+                                mix(this[key], component.prototype[key], true);
+                            }
+                        }
+                    }
 
                     if ('initialize' in this) {
                         this.initialize.apply(this, arguments);
@@ -1783,7 +2177,7 @@
 
                 mix(component.prototype, data);
 
-                return Function.extend(component, superclass);
+                return QW.FunctionH.extend(component, superclass);
             },
 
             // 注册组件
@@ -1818,15 +2212,25 @@
             },
 
             // 添加组件到预装载队列，等候装载
-            add: function(options) {
+            add: function(options, defaultOptions) {
                 if (isLoading) return;
 
                 options = toArray(options);
 
+                var op;
+
                 options.forEach(function(item){
-                    if (!this.has(item.name) && !loadedComponents.contains(item.name)) {
+                    // 合并默认选项
+                    if (Object.isString(item)) {
+                        op = {name: item};
+                    }
+                    else {
+                        op = item;
+                    }
+                    mix(op, defaultOptions);
+                    if (!this.has(op.name) && !loadedComponents.contains(op.name)) {
                         length++;
-                        preload.push(item);
+                        preload.push(op);
                     }
                 }, this);
 
@@ -1949,48 +2353,45 @@
 
     // URI 路由部分
     TF.Core.Router = function() {
-        var defaultChannelName = 'Home',
-            defaultName = 'Home';
+        var defaultName = 'Home';
 
-        var locationHash = null;
+        var locationHash = new TF.Library.LocationHash();
 
         // 额外的路由规则，不会影响系统既有路由规则
         var addtionRouter = [];
 
         var parse = function(hash) {
             var bits = hash.match(/tf-([^\/]*)\/?(.*)/);
-            var name, params, channelName;
+            var name, params;
             if (bits) {
-                channelName = defaultChannelName.capitalize();
                 name = bits[1] ? bits[1].camelize().capitalize() : defaultName;
 
                 params = bits[2] ? bits[2].split('/') : [];
             }
             else {
-                channelName = defaultChannelName;
                 name = defaultName;
                 params = [];
             }
 
-            return {name: name, channelName: channelName, params: params, uri: exports.makeUri(name, params)};
+            return {name: name, params: params, uri: exports.makeUri(name, params)};
         };
 
         var callback = function(hash){
             var result = parse(hash),
                 name = result.name,
-                channelName = result.channelName,
                 params = result.params;
 
-            var fullName = channelName + name;
+            var fullName = name;
 
             // 系统默认路由
             if (TF.Core.ComponentMgr.has(fullName)) {
-                TF.Core.Application.publish('GlobalRoute', [result.uri, [channelName, name, params]]);
+                TF.Core.Application.publish('GlobalRoute', [result.uri, [name, params]]);
                 TF.Core.ComponentMgr.post(fullName, 'component-route', params);
             }
             else {
                 // 非法参数
-                window.location = '#tf-' + defaultName.toLowerCase();
+                //window.location = '#tf-' + TF.Helper.Utility.toComponentUriName(defaultName);
+                mentor.Status.setFailMsg(TF.Helper.Utility.toComponentUriName(name) + ' uri error!');
             }
 
             // 额外路由
@@ -2008,7 +2409,7 @@
                         isMatch = true;
                         // 匹配上
                         if (TF.Core.ComponentMgr.has(value)) {
-                            TF.Core.Application.publish('GlobalRoute', [result.uri, [channelName, name, params]]);
+                            TF.Core.Application.publish('GlobalRoute', [result.uri, [name, params]]);
                             TF.Core.ComponentMgr.post(value, 'component-route', params);
                         }
                     }
@@ -2018,13 +2419,11 @@
         };
 
         var exports = {
-            create: function(channelName, name, router) {
+            create: function(name, router) {
                 addtionRouter = router || addtionRouter;
-                defaultChannelName = channelName || defaultChannelName;
                 defaultName = name || defaultName;
 
                 TF.Core.Application.subscribe('GlobalComponentLoaded', function(){
-                    locationHash = new TF.Library.LocationHash();
                     locationHash.on('hashChanged', function(e){
                         callback(e.hash);
                     });
@@ -2034,7 +2433,7 @@
 
             // 解析 hash 中的字符串，取得里面的信息
             parseUri: function(uri) {
-                return parse(uri || top.location.hash);
+                return parse(uri || locationHash.getHash());
             },
 
             makeUri: function(name, params) {
@@ -2053,10 +2452,24 @@
                 return result;
             },
 
-            go: function(uri) {
-                if (locationHash) {
+            go: function(uri, url) {
+                if (url) {
+                    //console.log(url + '#tf-' + encodeURI(uri));
+                    location.href = url + '#tf-' + encodeURI(uri);
+                }
+                else if (locationHash) {
                     locationHash.setHash('tf-' + uri);
                 }
+            },
+
+            setUri: function(uri) {
+                if (locationHash) {
+                    locationHash.setHash('tf-' + uri, true);
+                }
+            },
+
+            getUri: function(name) {
+                return 'tf-' + this.makeUri(name);
             }
         };
 
