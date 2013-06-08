@@ -3,16 +3,29 @@
 <head>
 	<title>demo1</title>
 	<meta charset="utf-8" />
-	<script src="../qwrap/qwrap.js"></script>
+	<script src="http://s9.qhimg.com/lib/qwrap/115.js"></script>
 	<script src="../qwrap/transformers.js"></script>
 </head>
 <body>
+<div id="content"></div>
 <script type="text/javascript">
-var obj = (new TF.Library.LocationHash());
-obj.on('hashChanged', function(e){
-    alert(e.hash);
+TF.Core.Application.create({
+    baseUrl: "./",
 });
-obj.start();
+
+TF.Core.Router.create('Home');
+
+TF.Core.ComponentMgr.add([{
+    name: 'Home',
+    appendRender: false,
+    lazyRender: false,
+    hide: false,
+    renderTo: '#content'
+}]);
+
+TF.Ready = function(){
+    TF.Core.ComponentMgr.startLoad();
+};
 </script>
 </body>
 </html>
