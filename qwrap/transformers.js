@@ -15,7 +15,7 @@
     var TF,
         Transformers = TF = Transformers || {
         'version': '1.1.0',
-        'build': '20131114'
+        'build': '20140102'
     };
 
     var mix = QW.ObjectH.mix,
@@ -1090,6 +1090,13 @@
 
         // 系统路由处理函数
         route: function(args) {
+            var notRefresh = false;
+
+//            if (JSON.stringify(this.lastArgs) !== JSON.stringify(args)) {
+//                this.lastArgs = args;
+//                notRefresh = false;
+//            }
+
             if (this.layoutType == 'normal') {
                 this.postMessage('component-only-show');
 
@@ -1101,7 +1108,7 @@
                     this.layoutData.page = 0;
                 }
 
-                this.renderNormalLayout();
+                this.renderNormalLayout(false, null, notRefresh);
             }
             else if (this.layoutType == 'tab') {
                 this.postMessage('component-only-show');
@@ -1118,7 +1125,7 @@
                     this.layoutData.tab.switchTo(0);
                 }
 
-                this.renderTabLayout();
+                this.renderTabLayout(false, null, notRefresh);
             }
             else {
                 this.postMessage('component-only-show');
@@ -1179,7 +1186,6 @@
                 this._loadComplete(W(this.options.applyTo));
             }
             else if (this.options.contentEl) {
-
                 //直接渲染
                 this._loadComplete(W(this.options.contentEl).cloneNode(true));
             }
@@ -1454,12 +1460,13 @@
                     value = {"click": value};
                 }
                 for (var type in value) {
-                    this.topElement.delegate(key, type, (function(e){
+                    this.topElement.delegate(key, type, (function(){
                         var func = value[type];
                         if (Object.isString(func)) {
                             func = me.instance[func];
                         }
                         return function(ev) {
+                            ev.stopPropagation();
                             return func.call(this, ev, me.instance);
                         };
                     })());
@@ -1510,7 +1517,10 @@
 
         _delegateJsAction: function(){
             var me = this;
-            this.topElement.delegate('[tf-action-click]', 'click', function(e){
+
+            this.topElement.delegate('[tf-action-click]', 'click', function(e) {
+                e.stopPropagation();
+
                 if (this.tagName.toLowerCase() == 'a') {
                     e.preventDefault();
                 }
@@ -1539,7 +1549,9 @@
         _delegateJsEvent: function(){
             var me = this;
 
-            this.topElement.delegate('.tf-click', 'click', function(e){
+            this.topElement.delegate('.tf-click', 'click', function(e) {
+                e.stopPropagation();
+
                 if (this.tagName.toLowerCase() == 'a') {
                     e.preventDefault();
                 }
@@ -1558,7 +1570,9 @@
                 }
             });
 
-            this.topElement.delegate('.tf-change', 'change', function(e){
+            this.topElement.delegate('.tf-change', 'change', function(e) {
+                e.stopPropagation();
+
                 e.__data = me._getBindingData(this);
 
                 var eventName = W(this).attr('tf-event-change').camelize();
@@ -1583,7 +1597,7 @@
                     }
                 });
                 // 如果没有 type=submit 的按钮则添加一个
-                if (form.query('button.tf-default').attr('type') != 'submit') {
+                if (form.query('button[type=submit]').length == 0) {
                     form.appendChild(Dom.create('<div style="position:absolute;left:-9999px;top:-9999px;"><button type="submit"></button></div>'));
                 }
             }
@@ -1687,7 +1701,7 @@
                 args.replaceRender = true;
                 args.renderTo = el;
 
-                componentMgr.add(args);
+                me.componentMgr.add(args);
             });
 
             this.componentMgr.startLoad(true);
@@ -1939,7 +1953,26 @@
                 else if (Object.isObject(item)) {
                     templateName = item.template;
                     html = this.query('.TFTemplate-' + item.template).html();
-                    this.query('.TFTarget-' + item.target).html(mentor.Template.render(html, args));
+
+                    if (Object.isString(item.target)) {
+                        this.query('.TFTarget-' + item.target).html(mentor.Template.render(html, args));
+                    }
+                    else {
+                        var targetElement = W(item.target);
+                        var match = /TFTarget-(\S+)/.exec(targetElement.attr('class'));
+                        var className;
+                        if (match) {
+                            className = match[1];
+                            W(item.target).html(mentor.Template.render(html, args));
+                        }
+                        else {
+                            className = 'gen-' + TF.Helper.Utility.random();
+                            W(item.target).addClass('TFTarget-' + className).html(mentor.Template.render(html, args));
+                        }
+
+                        item.target = className;
+                    }
+
                     this.templateData[item.template] = args;
                     this.templateData[item.target] = args;
                 }
@@ -2016,7 +2049,26 @@
                 }
                 else if (Object.isObject(item)) {
                     template.push(this.query('.TFTemplate-' + item.template));
-                    target.push(this.query('.TFTarget-' + item.target));
+
+                    if (Object.isString(item.target)) {
+                        target.push(this.query('.TFTarget-' + item.target));
+                    }
+                    else {
+                        var targetElement = W(item.target);
+                        var className;
+                        var match = /TFTarget-(\S+)/.exec(targetElement.attr('class'));
+                        if (match) {
+                            className = match[1];
+                        }
+                        else {
+                            className = 'gen-' + TF.Helper.Utility.random();
+                            targetElement.addClass('TFTarget-' + className);
+                        }
+
+                        item.target = className;
+                        target.push(targetElement);
+                    }
+
                     templateName.push(item.template);
                     targetName.push(item.target);
                 }
@@ -2180,6 +2232,7 @@
                     target = item.target;
                 }
                 me.query('.TFTarget-' + target + ' .ComponentPager').delegate('a', 'click', function(e){
+                    e.stopPropagation();
                     e.preventDefault();
 
                     //me.setLoadingMsg();
@@ -2415,7 +2468,10 @@
 
                 values.push(args);
                 //values.push(additional || []);
-                values.push(this.layoutData.items[index].page > 0 ? 'p' + this.layoutData.items[index].page : '');
+
+                if (this.layoutData.items[index].page > 0) {
+                    values.push('p' + this.layoutData.items[index].page);
+                }
 
                 this.setRouterArgs(values.expand(true));
             }
@@ -2451,6 +2507,8 @@
                     return item != '';
                 }).join('/'));
             }
+
+            this.lastArgs = args;
 
             // 组成一个可用的URI
             //channelName/name/params
@@ -2528,7 +2586,9 @@
             templateRequester: new TF.Library.Hash(),
             templateData: {},
             // 组件索引值
-            index: 0
+            index: 0,
+            // 组件最后获取的 URI 参数
+            lastArgs: []
         };
         mix(this.sys, componentSys);
 
