@@ -1,8 +1,8 @@
 /*
 *
-* Transformers for QWrap 核心库
+* Transformers for jQuery v1.1.0
 *
-* 为 QWrap 实现一套组件化开发模式
+* 为 jQuery 实现一套组件化开发模式与框架
 *
 */
 
@@ -18,8 +18,26 @@
         'build': '20131114'
     };
 
-    var mix = QW.ObjectH.mix,
+    var mix = $.extend,
         bind = QW.FunctionH.bind;
+
+    var namespace = function(sSpace, root) {
+        var arr = sSpace.split('.'),
+            i = 0,
+            nameI;
+        if (sSpace.indexOf('.') == 0) {
+            i = 1;
+            root = root || TF;
+        }
+        root = root || window;
+        for (; nameI = arr[i++];) {
+            if (!root[nameI]) {
+                root[nameI] = {};
+            }
+            root = root[nameI];
+        }
+        return root;
+    };
 
     // 创建名字空间
     namespace('Core', TF);
@@ -1179,6 +1197,7 @@
                 this._loadComplete(W(this.options.applyTo));
             }
             else if (this.options.contentEl) {
+
                 //直接渲染
                 this._loadComplete(W(this.options.contentEl).cloneNode(true));
             }
@@ -1453,13 +1472,12 @@
                     value = {"click": value};
                 }
                 for (var type in value) {
-                    this.topElement.delegate(key, type, (function(){
+                    this.topElement.delegate(key, type, (function(e){
                         var func = value[type];
                         if (Object.isString(func)) {
                             func = me.instance[func];
                         }
                         return function(ev) {
-                            ev.stopPropagation();
                             return func.call(this, ev, me.instance);
                         };
                     })());
@@ -1510,10 +1528,7 @@
 
         _delegateJsAction: function(){
             var me = this;
-
-            this.topElement.delegate('[tf-action-click]', 'click', function(e) {
-                e.stopPropagation();
-
+            this.topElement.delegate('[tf-action-click]', 'click', function(e){
                 if (this.tagName.toLowerCase() == 'a') {
                     e.preventDefault();
                 }
@@ -1542,9 +1557,7 @@
         _delegateJsEvent: function(){
             var me = this;
 
-            this.topElement.delegate('.tf-click', 'click', function(e) {
-                e.stopPropagation();
-
+            this.topElement.delegate('.tf-click', 'click', function(e){
                 if (this.tagName.toLowerCase() == 'a') {
                     e.preventDefault();
                 }
@@ -1563,9 +1576,7 @@
                 }
             });
 
-            this.topElement.delegate('.tf-change', 'change', function(e) {
-                e.stopPropagation();
-
+            this.topElement.delegate('.tf-change', 'change', function(e){
                 e.__data = me._getBindingData(this);
 
                 var eventName = W(this).attr('tf-event-change').camelize();
@@ -1590,7 +1601,7 @@
                     }
                 });
                 // 如果没有 type=submit 的按钮则添加一个
-                if (form.query('button[type=submit]').length == 0) {
+                if (form.query('button.tf-default').attr('type') != 'submit') {
                     form.appendChild(Dom.create('<div style="position:absolute;left:-9999px;top:-9999px;"><button type="submit"></button></div>'));
                 }
             }
@@ -1694,7 +1705,7 @@
                 args.replaceRender = true;
                 args.renderTo = el;
 
-                me.componentMgr.add(args);
+                componentMgr.add(args);
             });
 
             this.componentMgr.startLoad(true);
@@ -2187,7 +2198,6 @@
                     target = item.target;
                 }
                 me.query('.TFTarget-' + target + ' .ComponentPager').delegate('a', 'click', function(e){
-                    e.stopPropagation();
                     e.preventDefault();
 
                     //me.setLoadingMsg();

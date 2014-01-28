@@ -631,39 +631,37 @@
             });
 
             //console.log(components);
-            if (components.length == 0) {
-                return;
-            }
+            if (components.length > 0) {
+                var args;
+                var name;
+                var attributes;
+                var exclude = ['id', 'class', 'style'];
 
-            var args;
-            var name;
-            var attributes;
-            var exclude = ['id', 'class', 'style'];
+                components.forEach(function(el){
+                    el = W(el);
 
-            components.forEach(function(el){
-                el = W(el);
+                    args = {};
 
-                args = {};
+                    name = TF.Helper.Utility.toComponentName(el.attr('tagName').toLowerCase().slice(3));
 
-                name = TF.Helper.Utility.toComponentName(el.attr('tagName').toLowerCase().slice(3));
+                    //console.log(el[0].attributes);
+                    attributes = Array.toArray(el[0].attributes);
+                    //console.log(attributes);
 
-                //console.log(el[0].attributes);
-                attributes = Array.toArray(el[0].attributes);
-                //console.log(attributes);
+                    attributes.forEach(function(item){
+                        if (!exclude.contains(item.name)) {
+                            args[item.name.camelize()] = ((item.name == item.value || item.value === '') ? true : item.value);
+                        }
+                    });
 
-                attributes.forEach(function(item){
-                    if (!exclude.contains(item.name)) {
-                        args[item.name.camelize()] = ((item.name == item.value || item.value === '') ? true : item.value);
-                    }
+                    //console.log(args);
+                    args.name = name;
+                    args.replaceRender = true;
+                    args.renderTo = el;
+
+                    componentMgr.add(args);
                 });
-
-                //console.log(args);
-                args.name = name;
-                args.replaceRender = true;
-                args.renderTo = el;
-
-                componentMgr.add(args);
-            });
+            }
 
             componentMgr.startLoad();
         }

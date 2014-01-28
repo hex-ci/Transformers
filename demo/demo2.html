@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+	<title>demo1</title>
+	<meta charset="utf-8" />
+	<script src="http://javascript.u.qiniudn.com/qwrap/115.js"></script>
+	<script src="../src/qwrap/transformers.js"></script>
+</head>
+<body>
+<div id="content"></div>
+<script type="text/javascript">
+TF.Core.Application.create({
+    baseUrl: "./",
+});
+
+TF.Core.ComponentMgr.add([{
+    name: 'Home',
+    appendRender: false,
+    lazyRender: false,
+    hide: false,
+    renderTo: '#content'
+}]);
+
+TF.Ready = function(){
+    TF.Core.Application.bootstrap();
+};
+</script>
+</body>
+</html>
