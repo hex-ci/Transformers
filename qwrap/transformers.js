@@ -11,11 +11,22 @@
  * @author: Hex
  */
 
-;(function () {
+;(function(root, factory) {
+    if (typeof exports === 'object') {
+        module.exports = factory();
+    }
+    else if (typeof define === 'function' && define.amd) {
+        define([], factory);
+    }
+    else {
+        root['TF'] = factory();
+    }
+}(this, function() {
+
     var TF,
         Transformers = TF = Transformers || {
         'version': '1.1.0',
-        'build': '20140102'
+        'build': '20140115'
     };
 
     var mix = QW.ObjectH.mix,
@@ -642,7 +653,7 @@
 
                 attributes.forEach(function(item){
                     if (!exclude.contains(item.name)) {
-                        args[item.name.camelize()] = (item.name == item.value ? true : item.value);
+                        args[item.name.camelize()] = ((item.name == item.value || item.value === '') ? true : item.value);
                     }
                 });
 
@@ -784,6 +795,12 @@
                             des = {};
                         }
                         return mix(des, src, true);
+                    }
+                    else if (Object.isString(src)) {
+                        if (!des) {
+                            des = {};
+                        }
+                        return mix(des, src.queryUrl(), true);
                     }
                     else {
                         return des;
@@ -999,7 +1016,7 @@
     var componentSys = {
         // 组件消息处理中心
         postMessage: function(msg, args) {
-            this.parentComponentMgr.publish(this.name + '[' + this.index + ']', msg, args);
+            var returnValue;
 
             // 如果组件还未渲染，则等待组件完成渲染，再传递最后一个消息
             if (!this.rendered) {
@@ -1027,6 +1044,7 @@
                 if (!this.rendering) {
                     this.render();
                 }
+
                 return;
             }
             //if (!$defined(args)) args = {};
@@ -1084,8 +1102,12 @@
 
             // 把消息派发到组件实例中
             if (this.instance && Object.isFunction(this.instance[funcName + 'Action'])) {
-                this.instance[funcName + 'Action'].call(this.instance, filteredArgs, args);
+                returnValue = this.instance[funcName + 'Action'].call(this.instance, filteredArgs, args);
             }
+
+            this.parentComponentMgr.publish(this.name + '[' + this.index + ']', msg, args);
+
+            return returnValue;
         },
 
         // 系统路由处理函数
@@ -1097,9 +1119,12 @@
 //                notRefresh = false;
 //            }
 
-            if (this.layoutType == 'normal') {
+            // 如果现在路由到其他组件了，则不显示组件
+            if (TF.Core.Router.parseUri().name == this.name) {
                 this.postMessage('component-only-show');
+            }
 
+            if (this.layoutType == 'normal') {
                 if (args) {
                     // 传递页数给 fn 函数
                     this.layoutData.page = this.getUriPage(args);
@@ -1111,8 +1136,6 @@
                 this.renderNormalLayout(false, null, notRefresh);
             }
             else if (this.layoutType == 'tab') {
-                this.postMessage('component-only-show');
-
                 if (args) {
                     var index = this.layoutData.tabs.get(this.getUriTab(args)) || 0;
 
@@ -1128,7 +1151,6 @@
                 this.renderTabLayout(false, null, notRefresh);
             }
             else {
-                this.postMessage('component-only-show');
             }
         },
 
@@ -1230,18 +1252,23 @@
                     onsucceed: bind(this._loadComplete, this),
                     onerror: bind(function() {
                         //this.loadError('4. Ajax Error!');
+                        //this.unsetLoadingMsg();
                     }, this)
                 });
             }
+
+            //this.setLoadingMsg();
 
             this.loader.send();
         },
 
         _loadComplete: function(ajaxEvent) {
-            // TODO: 这里有BUG
+            if (ajaxEvent && ajaxEvent.target) {
+                //this.unsetLoadingMsg();
+            }
 
             // 如果是取消的请求，则什么也不做，我们只关心真正请求回来的数据，而不关心请求的状态
-            if (ajaxEvent.target.state == QW.Ajax.STATE_CANCEL) {
+            if (ajaxEvent && ajaxEvent.target && ajaxEvent.target.state == QW.Ajax.STATE_CANCEL) {
                 return;
             }
 
@@ -1251,7 +1278,7 @@
 
             var response, responseTree;
 
-            response = ajaxEvent.responseText;
+            response = (ajaxEvent.responseText ? ajaxEvent.responseText : ajaxEvent);
 
             if (Object.isString(response)) {
                 // 解决 IE 下 innerHTML 不能直接设置 script 的问题
@@ -1439,6 +1466,12 @@
                 this.refreshing = false;
 
                 this.instance.fire('failure', {instance: this.instance, fullName: this.fullName, name: this.name});
+
+                if (TF.Core.Config.debug) {
+                    console.error && console.error('Component [' + this.getComponentName() + '] load error!');
+                }
+
+                this.instance.LoadError();
             }
 
             return true;
@@ -1692,7 +1725,7 @@
 
                 attributes.forEach(function(item){
                     if (!exclude.contains(item.name)) {
-                        args[item.name.camelize()] = (item.name == item.value ? true : item.value);
+                        args[item.name.camelize()] = ((item.name == item.value || item.value === '') ? true : item.value);
                     }
                 });
 
@@ -2603,26 +2636,31 @@
             //this._isLoadingMsg = false;
         },
 
-        InstanceReady: function(loader) {
+        InstanceReady: function() {
             // 实例准备就绪
         },
-        DomReady: function(loader) {
+
+        DomReady: function() {
             // 组件中的 DOM 已经准备就绪
         },
-        DomRefreshReady: function(loader) {
+
+        DomRefreshReady: function() {
             // 组件中的 DOM 已经刷新完毕并准备就绪
         },
-        DomDestroy: function(loader) {
+
+        DomDestroy: function() {
             // 组件即将销毁
         },
+
         ComponentsReady: function() {
             // 子组件准备就绪
         },
-        loadError: function(loader, msg) {
+
+        LoadError: function() {
             // 组件装载出错
-            //alert('Component Error: ' + msg);
-            //ComponentObject._loadContent();
+            mentor.Status.setFailMsg('Component [' + this.sys.getComponentName() + '] load error! Please refresh!');
         },
+
         // 默认渲染错误回调函数
         RenderError: function(result) {
             //window.location = '#';
@@ -2819,6 +2857,8 @@
                 if (isLoading) return;
 
                 options = toArray(options);
+
+                defaultOptions = defaultOptions || {};
 
                 var op, name;
 
@@ -3093,7 +3133,8 @@
                                     agentObject[funcName] = function(actionName) {
                                         return function() {
                                             //console.log(this.__instance);
-                                            return this.__instance[actionName + 'Action'].apply(this.__instance, arguments);
+                                            return this.__instance.sys.postMessage(actionName.decamelize(), arguments[0]);
+                                            //return this.__instance[actionName + 'Action'].apply(this.__instance, arguments);
                                         };
                                     }(funcName);
                                 }
@@ -3121,7 +3162,8 @@
                                     agentExportObject[funcName] = function(actionName) {
                                         return function() {
                                             //console.log(this.__instance);
-                                            return this.__instance[actionName + 'Action'].apply(this.__instance, arguments);
+                                            return this.__instance.sys.postMessage(actionName.decamelize(), arguments[0]);
+                                            //return this.__instance[actionName + 'Action'].apply(this.__instance, arguments);
                                         };
                                     }(funcName);
                                 }
@@ -3284,4 +3326,6 @@
         TF: TF
     });
 
-}());
+    return TF;
+
+}));
