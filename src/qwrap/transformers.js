@@ -25,8 +25,8 @@
 
     var TF,
         Transformers = TF = Transformers || {
-        'version': '1.1.0',
-        'build': '20140115'
+        'version': '1.2.0',
+        'build': '20140221'
     };
 
     var mix = QW.ObjectH.mix,
@@ -38,7 +38,9 @@
     namespace('Library', TF);
     namespace('Helper', TF);
 
-    TF.Core.Config = {
+    TF.Config = {};
+
+    var defaultConfig = {
         baseUrl: '/',
         resourceVersion: 'ver',
         templateUriPattern: '{$name.join("-")}-view.html',
@@ -51,54 +53,64 @@
         mentor: {}
     };
 
-
     // 需要由外部程序提供方法才能实现相应功能
     var mentor = {};
 
     // 页面状态提示相关方法
     mentor.Status = function(){
         var isfun = QW.ObjectH.isFunction;
+        var cfg = TF.Config;
 
         var exports = {
-            unsetStatusMsg: function() {
-                var mt = TF.Core.Config.mentor;
+            unsetStatusMsg: function(appName) {
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.unsetStatusMsg)){
-                    mt.Status.unsetStatusMsg.apply(mt.Status, arguments);
+                    mt.Status.unsetStatusMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             },
 
-            setSuccMsg: function(){
-                var mt = TF.Core.Config.mentor;
+            setSuccMsg: function(appName){
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.setSuccMsg)){
-                    mt.Status.setSuccMsg.apply(mt.Status, arguments);
+                    mt.Status.setSuccMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             },
 
-            setFailMsg: function(){
-                var mt = TF.Core.Config.mentor;
+            setFailMsg: function(appName){
+                if (!cfg[appName]) {
+                    appName = defaultApplicationName;
+                }
+
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.setFailMsg)){
-                    mt.Status.setFailMsg.apply(mt.Status, arguments);
+                    mt.Status.setFailMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             },
 
-            setWarningMsg: function(){
-                var mt = TF.Core.Config.mentor;
+            setWarningMsg: function(appName){
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.setWarningMsg)){
-                    mt.Status.setWarningMsg.apply(mt.Status, arguments);
+                    mt.Status.setWarningMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             },
 
-            setLoadingMsg: function() {
-                var mt = TF.Core.Config.mentor;
+            setLoadingMsg: function(appName) {
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.setLoadingMsg)){
-                    mt.Status.setLoadingMsg.apply(mt.Status, arguments);
+                    mt.Status.setLoadingMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             },
 
-            unsetLoadingMsg: function() {
-                var mt = TF.Core.Config.mentor;
+            unsetLoadingMsg: function(appName) {
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.unsetLoadingMsg)){
-                    mt.Status.unsetLoadingMsg.apply(mt.Status, arguments);
+                    mt.Status.unsetLoadingMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             }
         };
@@ -112,10 +124,10 @@
         var isfun = QW.ObjectH.isFunction;
 
         var exports = {
-            render: function(text, opts) {
-                var mt = TF.Core.Config.mentor;
+            render: function(appName, text, opts) {
+                var mt = TF.Config[appName].mentor;
                 if (mt.Template && isfun(mt.Template.render)){
-                    return mt.Template.render.apply(mt.Template, arguments);
+                    return mt.Template.render.apply(mt.Template, [].slice.call(arguments, 1));
                 }
                 else {
                     return text.tmpl(text, opts);
@@ -133,10 +145,10 @@
 
         var exports = {
 
-            validation: function(jsonObject){
-                var mt = TF.Core.Config.mentor;
+            validation: function(appName, jsonObject){
+                var mt = TF.Config[appName].mentor;
                 if (mt.Ajax && isfun(mt.Ajax.validation)){
-                    return mt.Ajax.validation.apply(mt.Ajax, arguments);
+                    return mt.Ajax.validation.apply(mt.Ajax, [].slice.call(arguments, 1));
                 }
                 else {
                     return true;
@@ -199,55 +211,78 @@
 
     // 实用工具静态类，包括一些常用例程
     TF.Helper.Utility = {
-        baseUrl: function(){
-            return TF.Core.Config.baseUrl;
+        baseUrl: function(appName) {
+            appName = appName || defaultApplicationName;
+            return TF.Config[appName].baseUrl;
         },
 
-        siteUrl: function(uri){
+        siteUrl: function(appName, uri){
+            appName = appName || defaultApplicationName;
+
             if (uri.indexOf('http://') === 0) { return uri; }
-            else { return TF.Core.Config.baseUrl + uri; }
+            else { return TF.Config[appName].baseUrl + uri; }
         },
 
-        getApplicationPath: function() {
-            return TF.Core.Config.name ? TF.Core.Config.name.toLowerCase() + '/' : '';
+        // 根据组件名取得 Application Name
+        getApplicationName: function(name) {
+            var appName;
+
+            // 分析组件名中是否有 Application Name
+            if (name.indexOf(':') > 0) {
+                appName = name.split(':')[0];
+            }
+            else {
+                appName = defaultApplicationName;
+            }
+
+            return appName.capitalize();
         },
 
-        getComponentUrl: function(uri, name) {
-            var pattern = TF.Core.Config.dataUriPattern;
-            var names = TF.Helper.Utility.getComponentNameArray(name);
+        getComponentUrl: function(appName, uri, name) {
+            var cfg = TF.Config[appName];
+
+            // 通过 Application Name 得到相应的配置信息
+            var pattern = cfg.dataUriPattern;
+            var names = TF.Helper.Utility.splitComponentName(name);
 
             var str = pattern.tmpl({
                 name: names,
                 uri: uri
             });
 
-            return TF.Helper.Utility.baseUrl() + str;
+            return cfg.baseUrl + str;
         },
 
-        getComponentViewUrl: function(name) {
-            var pattern = TF.Core.Config.templateUriPattern;
-            var names = TF.Helper.Utility.getComponentNameArray(name);
+        getComponentViewUrl: function(appName, name) {
+            var cfg = TF.Config[appName];
+
+            // 通过 Application Name 得到相应的配置信息
+            var pattern = cfg.templateUriPattern;
+            var names = TF.Helper.Utility.splitComponentName(name);
             var str = pattern.tmpl({
                 name: names
             });
 
-            return TF.Helper.Utility.baseUrl() + str;
+            return cfg.baseUrl + str;
         },
 
-        getComponentJsUrl: function(name) {
-            var pattern = TF.Core.Config.jsUriPattern;
-            var names = TF.Helper.Utility.getComponentNameArray(name);
+        getComponentJsUrl: function(appName, name) {
+            var cfg = TF.Config[appName];
+
+            // 通过 Application Name 得到相应的配置信息
+            var pattern = cfg.jsUriPattern;
+            var names = TF.Helper.Utility.splitComponentName(name);
 
             var str = pattern.tmpl({
                 name: names,
-                ver: TF.Core.Config.resourceVersion
+                ver: cfg.resourceVersion
             });
 
-            return TF.Helper.Utility.baseUrl() + str;
+            return cfg.baseUrl + str;
         },
 
-        getDefaultDataUri: function() {
-            return TF.Core.Config.defaultDataUri;
+        getDefaultDataUri: function(appName) {
+            return TF.Config[appName].defaultDataUri;
         },
 
         // 生成随机数字字符串
@@ -256,18 +291,53 @@
         },
 
         // 转成大小写形式的组件名
+        // hulk:abc-def 转换成 Hulk:AbcDef
         toComponentName: function(uriName) {
-            return uriName.camelize().capitalize();
+            var appName;
+            var name;
+            var tmp;
+
+            // 分析组件名中是否有 Application Name
+            if (uriName.indexOf(':') > 0) {
+                tmp = uriName.split(':');
+
+                appName = tmp[0];
+                name = tmp[1];
+
+                return appName.capitalize() + ':' + name.camelize().capitalize();
+            }
+            else {
+                return uriName.camelize().capitalize();
+            }
         },
 
         // 转成小写分隔符形式的组件名
+        // Hulk:AbcDef 转换成 hulk:abc-def
         toComponentUriName: function(name, sep) {
-            return name.replace(/[A-Z]/g, function(a) {
-                return (sep || '-') + a.toLowerCase();
+            var appName;
+            var tmp;
+            var result = '';
+
+            sep = sep || '-';
+
+            // 分析组件名中是否有 Application Name
+            if (name.indexOf(':') > 0) {
+                tmp = name.split(':');
+
+                appName = tmp[0];
+                name = tmp[1];
+
+                result = appName.toLowerCase() + ':';
+            }
+
+            result += name.replace(/[A-Z]/g, function(a) {
+                return sep + a.toLowerCase();
             }).slice(1);
+
+            return result;
         },
 
-        getComponentNameArray: function(name) {
+        splitComponentName: function(name) {
             var result = [];
             name.replace(/([A-Z][a-z]*)/g, function(a) {
                 result.push(a.toLowerCase());
@@ -277,9 +347,17 @@
 
         // 从组件全名取得组件详细名称
         getComponentName: function(name) {
-            return name;
-        }
+            // 分析组件名中是否有 Application Name
+            if (name.indexOf(':') > 0) {
+                name = name.split(':')[1];
+            }
 
+            return name;
+        },
+
+        getFullComponentName: function(name) {
+            return TF.Helper.Utility.getApplicationName(name) + ':' + TF.Helper.Utility.getComponentName(name);
+        }
     };
 
 
@@ -580,9 +658,28 @@
     // 应用程序部分
     var appReady = false;
     var appSubscriptions = new TF.Library.Hash();
+    var defaultApplicationName = '';
+
     TF.Core.Application = {
-        create: function(config) {
-            mix(TF.Core.Config, config, true);
+        create: function(name, config) {
+            var appName = 'Transformers';
+            var appConfig;
+
+            if (Object.isString(name)) {
+                appName = name;
+                appConfig = config;
+            }
+            else {
+                appConfig = name;
+            }
+
+            TF.Config[appName] = mix({}, defaultConfig, true);
+            mix(TF.Config[appName], appConfig, true);
+
+            // 首次创建的应用为默认应用
+            if (!defaultApplicationName) {
+                defaultApplicationName = appName;
+            }
         },
 
         isReady: function() {
@@ -701,7 +798,7 @@
             this._instance = null;
             this._instanced = false;
             this.fullName = this.options.name;
-
+            this.appName = TF.Helper.Utility.getApplicationName(this.options.name);
             this.name = TF.Helper.Utility.getComponentName(this.options.name);
 
             // 注册到组件管理器
@@ -713,25 +810,23 @@
         },
 
         _preload: function() {
-//            // 判断是否有 deriveFrom 参数
-//            if (this.options.deriveFrom) {
-//                //
-//            }
+            // Application Name 不存在则创建
+            TF.Component[this.appName] = TF.Component[this.appName] || {};
 
-            var isLoad = (typeof TF.Component[this.name] != 'undefined');
+            var isLoad = (typeof TF.Component[this.appName][this.name] != 'undefined');
             if (isLoad) {
                 this._createInstance();
             }
             else {
-                QW.loadJs(TF.Helper.Utility.getComponentJsUrl(this.name), bind(function(){
-                    if (typeof TF.Component[this.name] != 'undefined') {
+                QW.loadJs(TF.Helper.Utility.getComponentJsUrl(this.appName, this.name), bind(function(){
+                    if (typeof TF.Component[this.appName][this.name] != 'undefined') {
                         // 加载成功
                         this._createInstance();
                     }
                     else {
                         // 加载失败
                         // 应该返回错误，或者记录日志
-                        this.fire('failure', {instance: null, fullName: this.fullName, name: this.name});
+                        this._failure();
                     }
                 }, this));
             }
@@ -740,45 +835,162 @@
         // 创建当前内容的名字空间实例
         _createInstance: function() {
             try {
-                this._instance = new TF.Component[this.name](this.options);
+                this._instance = new TF.Component[this.appName][this.name](this.options);
             }
             catch(e) {
             }
 
             if (!this._instance) {
-                //alert('组件装载出错，请刷新页面。');
-                this.fire('failure', {instance: null, fullName: this.fullName, name: this.name});
+                this._failure();
             }
 
             this._funcs = [];
             this._loadMentor(bind(this._initInstance, this));
+        },
 
-//            // 看看组件是否借用其他组件的方法和属性
-//            if (this._instance.Mentor) {
-//                var viewName = TF.Helper.Utility.getComponentName(this._instance.Mentor.name);
-//                this._instance.Mentor.viewName = viewName;
-//
-//                var isLoad = (typeof TF.Component[viewName] != 'undefined');
-//                var me = this;
-//
-//                if (isLoad) {
-//                    this._initInstance(TF.Component[viewName]);
-//                }
-//                else {
-//                    QW.loadJs(TF.Helper.Utility.getComponentJsUrl(viewName), function(){console.log(TF.Component[viewName].prototype.Mentor);
-//                        if (typeof TF.Component[viewName] != 'undefined') {
-//                            // 加载成功
-//                            me._initInstance(TF.Component[viewName]);
-//                        }
-//                        else {
-//                            me._initInstance();
-//                        }
-//                    });
-//                }
-//            }
-//            else {
-//                this._initInstance();
-//            }
+        // 组件依赖分析，根据依赖加载相应组件
+        // 返回组件实例
+        _loadMentor: function(callback, fullName, parentClass) {
+            var mentor;
+            var me = this;
+            var appName
+            var name;
+
+            if (fullName) {
+                appName = TF.Helper.Utility.getApplicationName(fullName);
+                name = TF.Helper.Utility.getComponentName(fullName);
+
+                var isLoad = (typeof TF.Component[appName][name] != 'undefined');
+
+                if (isLoad) {
+                    mentor = TF.Component[appName][name].prototype.Mentor;
+                    if (mentor && mentor.name) {
+                        me._loadMentor(function(){
+                            me._initMentor(fullName, parentClass, TF.Component[appName][name]);
+                            callback.call();
+                        }, mentor.name, TF.Component[appName][name]);
+                    }
+                    else {
+                        me._initMentor(fullName, parentClass, TF.Component[appName][name]);
+                        callback.call();
+                    }
+                }
+                else {
+                    QW.loadJs(TF.Helper.Utility.getComponentJsUrl(appName, name), function(){
+                        if (typeof TF.Component[appName][name] != 'undefined') {
+                            // 加载成功
+                            mentor = TF.Component[appName][name].prototype.Mentor;
+                            if (mentor && mentor.name) {
+                                me._loadMentor(function(){
+                                    me._initMentor(fullName, parentClass, TF.Component[appName][name]);
+                                    callback.call();
+                                }, mentor.name, TF.Component[appName][name]);
+                            }
+                            else {
+                                me._initMentor(name, parentClass, TF.Component[appName][name]);
+                                callback.call();
+                            }
+                        }
+                        else {
+                            // TODO: 要抛一个异常，表示依赖加载失败，或者是触发一个加载失败的事件
+                        }
+                    });
+                }
+
+            }
+            else {
+                if (this._instance.Mentor) {
+                    this._loadMentor(callback, this._instance.Mentor.name);
+                }
+                else {
+                    callback.call();
+                }
+            }
+        },
+
+        _initMentor: function(fullName, componentClass, mentorClass) {
+            var me = this;
+
+            componentClass = componentClass || this._instance;
+
+            if (Object.isFunction(componentClass)) {
+                mix(componentClass.prototype, mentorClass.prototype, function(des, src, key){
+                    if (key == 'Mentor' || componentClass.prototype.hasOwnProperty(key)) {
+                        return des;
+                    }
+                    else {
+                        return src;
+                    }
+                });
+
+                // 设置是否使用借用组件的视图
+                if (componentClass.prototype.Mentor.useMentorView) {
+                    componentClass.prototype.Mentor.useMentorView = false;
+                    componentClass.prototype.Mentor.useView = fullName;
+                }
+                else if (componentClass.prototype.Mentor.useView) {
+                    componentClass.prototype.Mentor.useView = mentorClass.prototype.Mentor.useView;
+                }
+
+                if (mentorClass.prototype.Mentor) {
+                    mix(componentClass.prototype.Mentor.viewData, mentorClass.prototype.Mentor.viewData, true);
+
+                    if (mentorClass.prototype.Mentor.__path) {
+                        componentClass.prototype.Mentor.__path = mentorClass.prototype.Mentor.__path;
+                    }
+                    else {
+                        componentClass.prototype.Mentor.__path = [];
+                    }
+                }
+                else {
+                    componentClass.prototype.Mentor.__path = [];
+                }
+
+                componentClass.prototype.Mentor.__path.push(fullName);
+            }
+            else {
+                // 把最后一级的父类方法转换一下放入当前实例
+                // 前提是子类重载了父类的方法
+                for (var i in mentorClass.prototype) {
+                    if (mentorClass.prototype.hasOwnProperty(i) && Object.isFunction(mentorClass.prototype[i]) && Object.isFunction(this._instance[i])) {
+                        this._instance['__parent__' + i] = mentorClass.prototype[i];
+                    }
+                }
+
+                mix(this._instance, mentorClass.prototype, function(des, src, key){
+                    if (key == 'Mentor' || TF.Component[me.appName][me.name].prototype.hasOwnProperty(key)) {
+                        return des;
+                    }
+                    else {
+                        return src;
+                    }
+                });
+
+                // 设置是否使用借用组件的视图
+                if (this._instance.Mentor.useMentorView) {
+                    if (mentorClass.prototype.Mentor && mentorClass.prototype.Mentor.useView) {
+                        this._instance.sys.viewName = mentorClass.prototype.Mentor.useView;
+                    }
+                    else {
+                        this._instance.sys.viewName = fullName;
+                    }
+                }
+                else if (this._instance.Mentor.useView) {
+                    this._instance.sys.viewName = this._instance.Mentor.useView;
+                }
+
+                if (mentorClass.prototype.Mentor && mentorClass.prototype.Mentor.__path) {
+                    this._instance.Mentor.__path = mentorClass.prototype.Mentor.__path;
+                    this._instance.Mentor.__path.push(fullName);
+                }
+                else {
+                    this._instance.Mentor.__path = [fullName];
+                }
+
+                this._instance.sys.options.data = this._instance.sys.options.data || {};
+                mix(this._instance.sys.options.data, this._instance.Mentor.viewData, true);
+            }
+
         },
 
         _initInstance: function(mentorClass) {
@@ -809,32 +1021,9 @@
                 }
             });
 
-//
-//            if (mentorClass) {
-//                var me = this;
-//                mix(this._instance, mentorClass.prototype, function(des, src, key){
-//                    if (TF.Component[me.name].prototype.hasOwnProperty(key)) {
-//                        return des;
-//                    }
-//                    else {
-//                        return src;
-//                    }
-//                });
-//
-//                // 设置是否使用借用组件的视图
-//                if (this._instance.Mentor.useMentorView) {
-//                    this._instance.sys.viewName = this._instance.Mentor.viewName;
-//                }
-//                else if (this._instance.Mentor.useView) {
-//                    this._instance.sys.viewName = TF.Helper.Utility.getComponentName(this._instance.Mentor.useView);
-//                }
-//
-//                this._instance.sys.options.data = this._instance.sys.options.data || {};
-//                mix(this._instance.sys.options.data, this._instance.Mentor.viewData, true);
-//            }
-
             this._instance.sys.hidden = this.options.hide;
             this._instance.sys.fullName = this.fullName;
+            this._instance.sys.appName = this.appName;
             this._instance.sys.name = this.name;
             this._instance.sys.index = this.options.__index || 0;
             // 组件需要知道自己的父级组件管理器是谁
@@ -845,156 +1034,18 @@
 
             //this.componentMgrInstance.loaded(this.fullName, this._instance);
 
-            this.fire('instanced', {instance: this._instance, fullName: this.fullName, name: this.name});
+            this.fire('instanced', {instance: this._instance, fullName: this.fullName, name: this.name, appName: this.appName});
 
             // 看是否是延迟渲染
             if (!this.options.lazyRender) {
                 this._instance.sys.render();
             }
 
-            this.fire('complete', {instance: this._instance, fullName: this.fullName, name: this.name});
+            this.fire('complete', {instance: this._instance, fullName: this.fullName, name: this.name, appName: this.appName});
         },
 
-        // 组件依赖分析，根据依赖加载相应组件
-        // 返回组件实例
-        _loadMentor: function(callback, name, parentClass) {
-            var mentor;
-            var me = this;
-
-            if (name) {
-                name = TF.Helper.Utility.getComponentName(name);
-
-                var isLoad = (typeof TF.Component[name] != 'undefined');
-
-                if (isLoad) {
-                    mentor = TF.Component[name].prototype.Mentor;
-                    if (mentor && mentor.name) {
-                        me._loadMentor(function(){
-                            me._initMentor(name, parentClass, TF.Component[name]);
-                            callback.call();
-                        }, mentor.name, TF.Component[name]);
-                    }
-                    else {
-                        me._initMentor(name, parentClass, TF.Component[name]);
-                        callback.call();
-                    }
-                }
-                else {
-                    QW.loadJs(TF.Helper.Utility.getComponentJsUrl(name), function(){
-                        if (typeof TF.Component[name] != 'undefined') {
-                            // 加载成功
-                            mentor = TF.Component[name].prototype.Mentor;
-                            if (mentor && mentor.name) {
-                                me._loadMentor(function(){
-                                    me._initMentor(name, parentClass, TF.Component[name]);
-                                    callback.call();
-                                }, mentor.name, TF.Component[name]);
-                            }
-                            else {
-                                me._initMentor(name, parentClass, TF.Component[name]);
-                                callback.call();
-                            }
-                        }
-                        else {
-                            // TODO: 要抛一个异常，表示依赖加载失败，或者是触发一个加载失败的事件
-                        }
-                    });
-                }
-
-            }
-            else {
-                if (this._instance.Mentor) {
-                    this._loadMentor(callback, this._instance.Mentor.name);
-                }
-                else {
-                    callback.call();
-                }
-            }
-        },
-
-        _initMentor: function(name, componentClass, mentorClass) {
-            var me = this;
-
-            componentClass = componentClass || this._instance;
-
-            if (Object.isFunction(componentClass)) {
-                mix(componentClass.prototype, mentorClass.prototype, function(des, src, key){
-                    if (key == 'Mentor' || componentClass.prototype.hasOwnProperty(key)) {
-                        return des;
-                    }
-                    else {
-                        return src;
-                    }
-                });
-
-                // 设置是否使用借用组件的视图
-                if (componentClass.prototype.Mentor.useMentorView) {
-                    componentClass.prototype.Mentor.useMentorView = false;
-                    componentClass.prototype.Mentor.useView = name;
-                }
-                else if (componentClass.prototype.Mentor.useView) {
-                    componentClass.prototype.Mentor.useView = mentorClass.prototype.Mentor.useView;
-                }
-
-                if (mentorClass.prototype.Mentor) {
-                    mix(componentClass.prototype.Mentor.viewData, mentorClass.prototype.Mentor.viewData, true);
-
-                    if (mentorClass.prototype.Mentor.__path) {
-                        componentClass.prototype.Mentor.__path = mentorClass.prototype.Mentor.__path;
-                    }
-                    else {
-                        componentClass.prototype.Mentor.__path = [];
-                    }
-                }
-                else {
-                    componentClass.prototype.Mentor.__path = [];
-                }
-
-                componentClass.prototype.Mentor.__path.push(name);
-            }
-            else {
-                // 把最后一级的父类方法转换一下放入当前实例
-                // 前提是子类重载了父类的方法
-                for (var i in mentorClass.prototype) {
-                    if (mentorClass.prototype.hasOwnProperty(i) && Object.isFunction(mentorClass.prototype[i]) && Object.isFunction(this._instance[i])) {
-                        this._instance['__parent__' + i] = mentorClass.prototype[i];
-                    }
-                }
-
-                mix(this._instance, mentorClass.prototype, function(des, src, key){
-                    if (key == 'Mentor' || TF.Component[me.name].prototype.hasOwnProperty(key)) {
-                        return des;
-                    }
-                    else {
-                        return src;
-                    }
-                });
-
-                // 设置是否使用借用组件的视图
-                if (this._instance.Mentor.useMentorView) {
-                    if (mentorClass.prototype.Mentor && mentorClass.prototype.Mentor.useView) {
-                        this._instance.sys.viewName = mentorClass.prototype.Mentor.useView;
-                    }
-                    else {
-                        this._instance.sys.viewName = name;
-                    }
-                }
-                else if (this._instance.Mentor.useView) {
-                    this._instance.sys.viewName = TF.Helper.Utility.getComponentName(this._instance.Mentor.useView);
-                }
-
-                if (mentorClass.prototype.Mentor && mentorClass.prototype.Mentor.__path) {
-                    this._instance.Mentor.__path = mentorClass.prototype.Mentor.__path;
-                    this._instance.Mentor.__path.push(name);
-                }
-                else {
-                    this._instance.Mentor.__path = [name];
-                }
-
-                this._instance.sys.options.data = this._instance.sys.options.data || {};
-                mix(this._instance.sys.options.data, this._instance.Mentor.viewData, true);
-            }
-
+        _failure: function() {
+            this.fire('failure', {instance: null, fullName: this.fullName, name: this.name, appName: this.appName});
         },
 
         getInstance: function() {
@@ -1048,8 +1099,8 @@
             //if (!$defined(args)) args = {};
 
             // before 用于处理消息返回值，表示是否继续传递消息
-            var is_continue = true,
-                funcName = msg.camelize();
+            var is_continue = true;
+            var funcName = msg.camelize();
 
             // 传递处理过的参数给 Action
             var filteredArgs = args;
@@ -1118,7 +1169,7 @@
 //            }
 
             // 如果现在路由到其他组件了，则不显示组件
-            if (TF.Core.Router.parseUri().name == this.name) {
+            if (TF.Helper.Utility.getFullComponentName(TF.Core.Router.parseUri().name) == TF.Helper.Utility.getFullComponentName(this.fullName)) {
                 this.postMessage('component-only-show');
             }
 
@@ -1230,10 +1281,12 @@
         // 装载组件模板
         _loadContent: function() {
             if (this.options.url == '') {
-                this.options.url = TF.Helper.Utility.getComponentViewUrl(this.viewName || this.name);
+                this.options.url = (this.viewName ?
+                                    TF.Helper.Utility.getComponentViewUrl(TF.Helper.Utility.getApplicationName(this.viewName),
+                                    TF.Helper.Utility.getComponentName(this.viewName)) : TF.Helper.Utility.getComponentViewUrl(this.appName, this.name));
             }
             else if (this.options.url.indexOf("http:/"+"/") < 0) {
-                this.options.url = TF.Helper.Utility.siteUrl(this.options.url);
+                this.options.url = TF.Helper.Utility.siteUrl(this.appName, this.options.url);
             }
 
             if (!this.options.hasCache) {
@@ -1369,7 +1422,7 @@
 
                 if (obj && template.length > 0) {
                     // 是客户端渲染，执行模板操作
-                    this.query().html(mentor.Template.render(template.html(), {'ComponentData': obj}));
+                    this.query().html(mentor.Template.render(this.appName, template.html(), {'ComponentData': obj}));
                 }
 
                 this.instance.options['TFData'] = obj;
@@ -1389,7 +1442,7 @@
                     }
                 }, this);
 
-                this.instance.fire('complete', {instance: this.instance, fullName: this.fullName, name: this.name});
+                this.instance.fire('complete', this._getEventObject());
 
                 // 页面全部装载完成！
                 if (this.refreshing) {
@@ -1412,7 +1465,7 @@
                         // 刷新完毕
                         this.refreshing = false;
 
-                        this.instance.fire('refreshReady', {instance: this.instance, fullName: this.fullName, name: this.name});
+                        this.instance.fire('refreshReady', this._getEventObject());
 
                     }, this));
 
@@ -1451,7 +1504,7 @@
                             this.lastMessage = null;
                         }
 
-                        this.instance.fire('ready', {instance: this.instance, fullName: this.fullName, name: this.name});
+                        this.instance.fire('ready', this._getEventObject());
 
                     }, this));
 
@@ -1463,9 +1516,9 @@
                 // 刷新完毕
                 this.refreshing = false;
 
-                this.instance.fire('failure', {instance: this.instance, fullName: this.fullName, name: this.name});
+                this.instance.fire('failure', this._getEventObject());
 
-                if (TF.Core.Config.debug) {
+                if (TF.Config[this.appName].debug) {
                     console.error && console.error('Component [' + this.getComponentName() + '] load error!');
                 }
 
@@ -1473,6 +1526,15 @@
             }
 
             return true;
+        },
+
+        _getEventObject: function() {
+            return {
+                instance: this.instance,
+                fullName: this.fullName,
+                name: this.name,
+                appName: this.appName
+            };
         },
 
         _loadError: function(msg) {
@@ -1606,9 +1668,12 @@
 
                 e.__data = me._getBindingData(this);
 
-                var eventName = W(this).attr('tf-event-change').camelize();
-                if (me.instance && Object.isFunction(me.instance[eventName + 'Event'])) {
-                    return me.instance[eventName + 'Event'].call(this, e, me.instance);
+                var eventName = W(this).attr('tf-event-change');
+                if (eventName) {
+                    eventName = eventName.camelize();
+                    if (me.instance && Object.isFunction(me.instance[eventName + 'Event'])) {
+                        return me.instance[eventName + 'Event'].call(this, e, me.instance);
+                    }
                 }
             });
         },
@@ -1635,7 +1700,9 @@
         },
 
         _setDefaultFocus: function() {
-            if (this.isHidden()) return;
+            if (this.isHidden()) {
+                return;
+            }
 
             var form = this.query('form.tf-focus');
             if (form.length > 0) {
@@ -1813,13 +1880,13 @@
         _setTopElement: function(el, prefix) {
             prefix = prefix || 'transformers_id';
             this.topElement = W(el).attr('id', prefix + '_' + TF.Helper.Utility.random())
-                              .addClass('g-tf-' + TF.Helper.Utility.toComponentUriName(this.fullName));
+                              .addClass('g-tf-' + TF.Helper.Utility.toComponentUriName(this.fullName).replace(':', '-'));
 
             if (this.instance.Mentor && this.instance.Mentor.__path) {
                 var path = this.instance.Mentor.__path;
 
                 for (var i = path.length - 1; i >= 0; i--) {
-                    this.topElement.addClass('g-tf-' + TF.Helper.Utility.toComponentUriName(path[i]));
+                    this.topElement.addClass('g-tf-' + TF.Helper.Utility.toComponentUriName(path[i]).replace(':', '-'));
                 }
             }
         },
@@ -1837,22 +1904,22 @@
         setLoadingMsg: function(msg) {
             //if (this._isLoadingMsg) return;
             //this._isLoadingMsg = true;
-            mentor.Status.setLoadingMsg(msg, this.instance);
+            mentor.Status.setLoadingMsg(this.appName, msg, this.instance);
         },
         unsetLoadingMsg: function() {
             //if (this._isLoadingMsg) return;
             //this._isLoadingMsg = true;
-            mentor.Status.unsetLoadingMsg(this.instance);
+            mentor.Status.unsetLoadingMsg(this.appName, this.instance);
         },
         setSuccMsg: function(msg) {
-            mentor.Status.setSuccMsg(msg, this.instance, {});
+            mentor.Status.setSuccMsg(this.appName, msg, this.instance, {});
         },
         setFailMsg: function(msg) {
-            mentor.Status.setFailMsg(msg, this.instance, {});
+            mentor.Status.setFailMsg(this.appName, msg, this.instance, {});
         },
 
         getUrl: function(uri) {
-            return TF.Helper.Utility.getComponentUrl(uri || '', this.name);
+            return TF.Helper.Utility.getComponentUrl(this.appName, uri || '', this.name);
         },
 
         // 封装组件内容 Request
@@ -1861,7 +1928,7 @@
                 url = this.getUrl(url);
             }
             else {
-                url = TF.Helper.Utility.siteUrl(url.slice(1));
+                url = TF.Helper.Utility.siteUrl(this.appName, url.slice(1));
             }
 
             var ajaxOptions = {
@@ -1928,12 +1995,12 @@
             }
 
             // 输出调试信息
-            if (TF.Core.Config.debug) {
+            if (TF.Config[this.sys.appName].debug) {
                 var param = Object.isString(ajaxEvent.target.data) ? ajaxEvent.target.data : Object.encodeURIJson(ajaxEvent.target.data);
                 console.debug && console.debug('url: ' + ajaxEvent.target.url + (param ? '?' + param : ''));
             }
 
-            var isError = !mentor.Ajax.validation(result);
+            var isError = !mentor.Ajax.validation(this.sys.appName, result);
             var args;
 
             if (isError){
@@ -1955,12 +2022,12 @@
 
             if (isError) {
                 // 显示错误消息
-                mentor.Status.setFailMsg(args.message, this, args);
+                mentor.Status.setFailMsg(this.sys.appName, args.message, this, args);
             }
             else {
                 if (Object.isString(args.message)) {
                     // 显示成功消息
-                    mentor.Status.setSuccMsg(args.message, this, args);
+                    mentor.Status.setSuccMsg(this.sys.appName, args.message, this, args);
                 }
             }
         },
@@ -1978,7 +2045,7 @@
                 // 根据不同情况取 Target 名
                 if (Object.isString(item)) {
                     html = this.query('.TFTemplate-' + item).html();
-                    this.query('.TFTarget-' + item).html(mentor.Template.render(html, args));
+                    this.query('.TFTarget-' + item).html(mentor.Template.render(this.appName, html, args));
                     this.templateData[item] = args;
                 }
                 else if (Object.isObject(item)) {
@@ -1986,7 +2053,7 @@
                     html = this.query('.TFTemplate-' + item.template).html();
 
                     if (Object.isString(item.target)) {
-                        this.query('.TFTarget-' + item.target).html(mentor.Template.render(html, args));
+                        this.query('.TFTarget-' + item.target).html(mentor.Template.render(this.appName, html, args));
                     }
                     else {
                         var targetElement = W(item.target);
@@ -1994,11 +2061,11 @@
                         var className;
                         if (match) {
                             className = match[1];
-                            W(item.target).html(mentor.Template.render(html, args));
+                            W(item.target).html(mentor.Template.render(this.appName, html, args));
                         }
                         else {
                             className = 'gen-' + TF.Helper.Utility.random();
-                            W(item.target).addClass('TFTarget-' + className).html(mentor.Template.render(html, args));
+                            W(item.target).addClass('TFTarget-' + className).html(mentor.Template.render(this.appName, html, args));
                         }
 
                         item.target = className;
@@ -2012,7 +2079,7 @@
 
         // 取得渲染后的模板内容
         getRenderedTemplate: function(name, args) {
-            return mentor.Template.render(this.query('.TFTemplate-' + name).html(), args || {});
+            return mentor.Template.render(this.appName, this.query('.TFTemplate-' + name).html(), args || {});
         },
 
         // 动态渲染模板，支持自动分页
@@ -2025,7 +2092,7 @@
                 this.setLoadingMsg(args.loadingMsg);
             }
 
-            var url = this.getUrl(actionName || TF.Helper.Utility.getDefaultDataUri());
+            var url = this.getUrl(actionName || TF.Helper.Utility.getDefaultDataUri(this.appName));
             var me = this;
 
             name = toArray(name);
@@ -2138,7 +2205,7 @@
                 },
                 onsucceed: function(ajaxEvent) {
                     // 输出调试信息
-                    if (TF.Core.Config.debug) {
+                    if (TF.Config[me.appName].debug) {
                         var param = Object.isString(ajaxEvent.target.data) ? ajaxEvent.target.data : Object.encodeURIJson(ajaxEvent.target.data);
                         console.debug('url: ' + ajaxEvent.target.url + (param ? '?' + param : ''));
                     }
@@ -2190,14 +2257,14 @@
                         __TF: {}
                     }, true);
 
-                    if (mentor.Ajax.validation(result)) {
+                    if (mentor.Ajax.validation(me.appName, result)) {
                         // 执行成功
                         template.forEach(function(t, i) {
                             result.__TF.template = templateName[i];
                             result.__TF.target = targetName[i];
                             object = W(target[i]);
                             try {
-                                object.html(mentor.Template.render(t.html(), result));
+                                object.html(mentor.Template.render(me.appName, t.html(), result));
                             }
                             catch(e) {
                                 object.html(e);
@@ -2531,7 +2598,7 @@
         // name 是组件名，默认不写则是当前组件
         setRouterArgs: function(args, name) {
             var uri = [];
-            uri.push(TF.Helper.Utility.toComponentUriName(name || this.name));
+            uri.push(TF.Helper.Utility.toComponentUriName(name || this.fullName));
             args = toArray(args);
             if (args.length > 0) {
                 uri.push(args.filter(function(item){
@@ -2542,7 +2609,7 @@
             this.lastArgs = args;
 
             // 组成一个可用的URI
-            //channelName/name/params
+            //appName:name/params
 
             //var old = this._getHistoryMgrValues();
             //if (old[0] == name[0] && old[1] == name[1]) return;
@@ -2656,7 +2723,7 @@
 
         LoadError: function() {
             // 组件装载出错
-            mentor.Status.setFailMsg('Component [' + this.sys.getComponentName() + '] load error! Please refresh!');
+            mentor.Status.setFailMsg(this.sys.appName, 'Component [' + this.sys.getComponentName() + '] load error! Please refresh!');
         },
 
         // 默认渲染错误回调函数
@@ -2666,6 +2733,36 @@
             //mentor.Status.setFailMsg(result.error, false, this);
         }
     });
+
+
+    // 创建组件
+    var defineComponentClass = function(data) {
+        var superclass = TF.Component.Default
+
+        var component = function(){
+
+            // 执行父类构造函数
+            superclass.apply(this, arguments);
+
+            // 从原型中拷贝普通变量到实例中
+            for (var key in component.prototype) {
+                if (component.prototype.hasOwnProperty(key)) {
+                    if (Object.isPlainObject(component.prototype[key])) {
+                        this[key] = {};
+                        mix(this[key], component.prototype[key], true);
+                    }
+                }
+            }
+
+            if ('initialize' in this) {
+                this.initialize.apply(this, arguments);
+            }
+        };
+
+        mix(component.prototype, data);
+
+        return QW.FunctionH.extend(component, superclass);
+    };
 
 
     // 制作组件管理器类
@@ -2687,12 +2784,16 @@
             // 组件别名关联数组
             componentAlias = new TF.Library.Hash();
 
+        var getFullName = TF.Helper.Utility.getFullComponentName;
+
         var loadComplete = function(e) {
+            var fullName = getFullName(e.fullName);
+
             if (e.instance == null) {
-                throw 'Error: Component "' + e.fullName + '" load error! Please check Component Class Name!';
+                throw 'Error: Component "' + fullName + '" load error! Please check Component Class Name!';
             }
 
-            var currentObj = components.get(e.fullName)[e.instance.options.__index || 0];
+            var currentObj = components.get(fullName)[e.instance.options.__index || 0];
 
             currentObj.loaded = true;
             currentObj.instance = e.instance;
@@ -2730,7 +2831,9 @@
         var loadFirstComplete = function(e) {
             loadComplete(e);
 
-            components.get(e.fullName).slice(1).forEach(function(item, index) {
+            var fullName = getFullName(e.fullName);
+
+            components.get(fullName).slice(1).forEach(function(item, index) {
                 item.options.__index = index + 1;
                 var obj = new TF.Library.ComponentLoader(item.options, exports);
                 obj.on('complete', loadComplete);
@@ -2747,7 +2850,9 @@
                 loadComplete(e);
             }
 
-            components.get(e.fullName).slice(1).forEach(function(item, index) {
+            var fullName = getFullName(e.fullName);
+
+            components.get(fullName).slice(1).forEach(function(item, index) {
                 item.options.__index = index + 1;
                 var obj = new TF.Library.ComponentLoader(item.options, exports);
                 obj.on('complete', renderComplete);
@@ -2758,7 +2863,7 @@
 
         // 解析组件名
         var parseName = function(name) {
-            var match = /^([a-z0-9]+)(?:\[([a-z0-9-_]+)\])?$/i.exec(name);
+            var match = /^([a-z0-9:]+)(?:\[([a-z0-9-_]+)\])?$/i.exec(name);
             var index = 0;
 
             if (match) {
@@ -2786,35 +2891,10 @@
             };
         };
 
-
         var exports = {
             // 创建组件
             create: function(data) {
-                var superclass = TF.Component.Default
-
-                var component = function(){
-
-                    // 执行父类构造函数
-                    superclass.apply(this, arguments);
-
-                    // 从原型中拷贝普通变量到实例中
-                    for (var key in component.prototype) {
-                        if (component.prototype.hasOwnProperty(key)) {
-                            if (Object.isPlainObject(component.prototype[key])) {
-                                this[key] = {};
-                                mix(this[key], component.prototype[key], true);
-                            }
-                        }
-                    }
-
-                    if ('initialize' in this) {
-                        this.initialize.apply(this, arguments);
-                    }
-                };
-
-                mix(component.prototype, data);
-
-                return QW.FunctionH.extend(component, superclass);
+                return defineComponentClass(data);
             },
 
             // 注册组件
@@ -2830,7 +2910,7 @@
 
                 progressLength = 0;
 
-                components.forEach(function(item) {//console.log(item);
+                components.forEach(function(item) {
                     item[0].options.__index = 0;
                     var obj = new TF.Library.ComponentLoader(item[0].options, this);
                     if (item.length > 1) {
@@ -2870,7 +2950,7 @@
                     }
                     mix(op, defaultOptions);
 
-                    name = op.name;
+                    name = getFullName(op.name);
 
                     length++;
 
@@ -2907,7 +2987,7 @@
             // TODO
             // 添加组件到后台装载数组，等候随时装载
             addToBg: function(options) {
-                backgroundComponents.set(options.name, options);
+                backgroundComponents.set(getFullName(options.name), options);
 
                 return this;
             },
@@ -2915,10 +2995,14 @@
             // TODO
             // 装载某个后台组件
             loadBgComponent: function(name) {
-                var options = backgroundComponents.get(name),
-                    lastMessage;
+                name = getFullName(name);
 
-                if (components.has(name) || !options) return;
+                var options = backgroundComponents.get(name);
+                var lastMessage;
+
+                if (components.has(name) || !options) {
+                    return;
+                }
 
                 var fn = bind(function(e) {
                     //mentor.Status.unsetLoadingMsg();
@@ -2937,6 +3021,8 @@
 
             // 删除组件
             remove: function(name) {
+                name = getFullName(name);
+
                 var obj = parseName(name);
 
                 if (obj.index === undefined) {
@@ -2958,6 +3044,8 @@
                 name = toArray(name);
 
                 name.forEach(function(item) {
+                    item = getFullName(item);
+
                     // 处理事件订阅
                     this.publish(item, msg, args);
 
@@ -3000,16 +3088,19 @@
 
             // 显示当前容器中 name 所指定的组件，并且隐藏此容器中其它组件
             show: function(name) {
+                name = getFullName(name);
                 this.post(name, 'component-only-show');
             },
 
             has: function(name) {
+                name = getFullName(name);
                 var nameObj = parseName(name);
                 return components.has(nameObj.name) || backgroundComponents.has(nameObj.name);
             },
 
             // 取某个名字下的组件实例个数
             length: function(name) {
+                name = getFullName(name);
                 var nameObj = parseName(name);
                 if (components.has(nameObj.name)) {
                     return components.get(nameObj.name).length;
@@ -3021,6 +3112,7 @@
 
             // 以某个函数订阅某个组件的消息
             subscribe: function(name, msg, fn, scope) {
+                name = getFullName(name);
                 var nameObj = parseName(name);
 
                 name = nameObj.name + (nameObj.index === undefined ? '' : '[' + nameObj.index + ']');
@@ -3047,6 +3139,7 @@
 
             // 发布消息
             publish: function(name, msg, args) {
+                name = getFullName(name);
                 var nameObj = parseName(name);
                 var loaded = false;
 
@@ -3094,6 +3187,7 @@
             // 获取一个组件实例的代理，只可以调用组件 Action 方法
             // TODO: 目前只支持每个组件名一个实例，未来需要考虑同一个组件加载多次的需求
             getAgent: function(name) {
+                name = getFullName(name);
                 var nameObj = parseName(name);
 
                 var agentObject;
@@ -3195,8 +3289,9 @@
         var parse = function(hash) {
             var bits = hash.match(/tf-([^\/]*)\/?(.*)/);
             var name, params;
+
             if (bits) {
-                name = bits[1] ? bits[1].camelize().capitalize() : defaultName;
+                name = bits[1] ? TF.Helper.Utility.toComponentName(bits[1]) : defaultName;
 
                 params = bits[2] ? bits[2].split('/') : [];
             }
@@ -3205,7 +3300,11 @@
                 params = [];
             }
 
-            return {name: name, params: params, uri: exports.makeUri(name, params)};
+            return {
+                name: name,
+                params: params,
+                uri: exports.makeUri(name, params)
+            };
         };
 
         var callback = function(hash){
@@ -3223,7 +3322,7 @@
             else {
                 // 非法参数
                 //window.location = '#tf-' + TF.Helper.Utility.toComponentUriName(defaultName);
-                mentor.Status.setFailMsg(TF.Helper.Utility.toComponentUriName(name) + ' uri error!');
+                mentor.Status.setFailMsg(TF.Helper.Utility.getApplicationName(fullName), TF.Helper.Utility.toComponentUriName(name) + ' uri error!');
             }
 
             // 额外路由
@@ -3309,12 +3408,31 @@
     }();
 
 
+    TF.define = function(name, options) {
+        var appName;
+
+        if (Object.isString(name)) {
+            appName = TF.Helper.Utility.getApplicationName(name);
+            name = TF.Helper.Utility.getComponentName(name);
+
+            TF.Component[appName] = TF.Component[appName] || {};
+
+            TF.Component[appName][name] = defineComponentClass(options);
+
+            return TF.Component[appName][name];
+        }
+        else {
+            return defineComponentClass(name);
+        }
+    };
+
+
     Dom.ready(function(){
         appReady = true;
         TF.Core.Application.publish('DomReady');
         // 执行页面默认的装载完成函数
-        if (TF.Ready != undefined) {
-            TF.Ready();
+        if (TF.ready != undefined) {
+            TF.ready();
         }
     });
 
