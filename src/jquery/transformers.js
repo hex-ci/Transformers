@@ -1,6 +1,6 @@
 /*
 *
-* Transformers for jQuery v1.1.0
+* Transformers for jQuery
 *
 * 为 jQuery 实现一套组件化开发模式与框架
 *
@@ -11,24 +11,66 @@
  * @author: Hex
  */
 
-;(function () {
+;(function(root, factory) {
+    if (typeof exports === 'object') {
+        module.exports = factory();
+    }
+    else if (typeof define === 'function' && define.amd) {
+        define([], factory);
+    }
+    else {
+        root['TF'] = factory();
+    }
+}(this, function() {
+
     var TF,
         Transformers = TF = Transformers || {
-        'version': '1.1.0',
-        'build': '20131114'
+        'version': '1.2.0',
+        'build': '20140324'
     };
 
-    var mix = $.extend,
-        bind = QW.FunctionH.bind;
+    var proxy = $.proxy;
+    var extend = $.extend;
 
+    /**
+     * 将源对象的属性并入到目标对象
+     * @method mix
+     * @static
+     * @param {Object} des 目标对象
+     * @param {Object} src 源对象
+     * @param {boolean} override (Optional) 是否覆盖已有属性。如果为function则初为混合器，为src的每一个key执行 des[key] = override(des[key], src[key], key);
+     * @returns {Object} des
+     */
+    var mix = function(des, src, override) {
+        if (typeof override == 'function') {
+            for (i in src) {
+                des[i] = override(des[i], src[i], i);
+            }
+        }
+        else {
+            for (i in src) {
+                //这里要加一个des[i]，是因为要照顾一些不可枚举的属性
+                if (override || !(des[i] || (i in des))) {
+                    des[i] = src[i];
+                }
+            }
+        }
+
+        return des;
+    };
+
+    /**
+     * 获得一个命名空间
+     * @method namespace
+     * @static
+     * @param { String } sSpace 命名空间符符串。如果命名空间不存在，则自动创建。
+     * @param { Object } root (Optional) 命名空间的起点。当没传root时：默认为window。
+     * @return {any} 返回命名空间对应的对象
+     */
     var namespace = function(sSpace, root) {
         var arr = sSpace.split('.'),
             i = 0,
             nameI;
-        if (sSpace.indexOf('.') == 0) {
-            i = 1;
-            root = root || TF;
-        }
         root = root || window;
         for (; nameI = arr[i++];) {
             if (!root[nameI]) {
@@ -39,13 +81,70 @@
         return root;
     };
 
+    /**
+     * eval某字符串，这个字符串是一个js表达式，并返回表达式运行的结果
+     * @method evalExp
+     * @static
+     * @param {String} s 字符串
+     * @param {any} opts eval时需要的参数。
+     * @return {any} 根据字符结果进行返回。
+     */
+    var evalExp = function(s, opts) {
+        return new Function("opts", "return (" + s + ");")(opts);
+    };
+
+    (function(){
+        var rCRLF = /\r?\n/g,
+            manipulation_rcheckableType = /^(?:checkbox|radio)$/i,
+            rsubmitterTypes = /^(?:submit|button|image|reset|file)$/i,
+            rsubmittable = /^(?:input|select|textarea|keygen)/i;
+
+        $.fn.extend({
+            serialize: function(options) {
+                return jQuery.param( this.serializeArray(options) );
+            },
+            serializeArray: function(options) {
+                options = options || {};
+
+                return this.map(function(){
+                    // Can add propHook for "elements" to filter or add form elements
+                    var elements = jQuery.prop( this, "elements" );
+                    return elements ? jQuery.makeArray( elements ) : this;
+                })
+                .filter(function(){
+                    var type = this.type;
+                    // Use .is(":disabled") so that fieldset[disabled] works
+                    return this.name && (!jQuery( this ).is( ":disabled" ) || (this.nodeName.toLowerCase() == 'select' && options.withDisabledSelect) ) &&
+                        rsubmittable.test( this.nodeName ) && !rsubmitterTypes.test( type ) &&
+                        ( this.checked || !manipulation_rcheckableType.test( type ) );
+                })
+                .map(function( i, elem ){
+                    var val = jQuery( this ).val();
+
+                    return val == null ?
+                        null :
+                        jQuery.isArray( val ) ?
+                            jQuery.map( val, function( val ){
+                                return { name: elem.name, value: val.replace( rCRLF, "\r\n" ) };
+                            }) :
+                            { name: elem.name, value: val.replace( rCRLF, "\r\n" ) };
+                }).get();
+            }
+        });
+    })();
+
+
+
+
     // 创建名字空间
     namespace('Core', TF);
     namespace('Component', TF);
+    namespace('Config', TF);
     namespace('Library', TF);
     namespace('Helper', TF);
 
-    TF.Core.Config = {
+
+    var defaultConfig = {
         baseUrl: '/',
         resourceVersion: 'ver',
         templateUriPattern: '{$name.join("-")}-view.html',
@@ -58,54 +157,64 @@
         mentor: {}
     };
 
-
     // 需要由外部程序提供方法才能实现相应功能
     var mentor = {};
 
     // 页面状态提示相关方法
     mentor.Status = function(){
-        var isfun = QW.ObjectH.isFunction;
+        var isfun = $.isFunction;
+        var cfg = TF.Config;
 
         var exports = {
-            unsetStatusMsg: function() {
-                var mt = TF.Core.Config.mentor;
+            unsetStatusMsg: function(appName) {
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.unsetStatusMsg)){
-                    mt.Status.unsetStatusMsg.apply(mt.Status, arguments);
+                    mt.Status.unsetStatusMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             },
 
-            setSuccMsg: function(){
-                var mt = TF.Core.Config.mentor;
+            setSuccMsg: function(appName){
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.setSuccMsg)){
-                    mt.Status.setSuccMsg.apply(mt.Status, arguments);
+                    mt.Status.setSuccMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             },
 
-            setFailMsg: function(){
-                var mt = TF.Core.Config.mentor;
+            setFailMsg: function(appName){
+                if (!cfg[appName]) {
+                    appName = defaultApplicationName;
+                }
+
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.setFailMsg)){
-                    mt.Status.setFailMsg.apply(mt.Status, arguments);
+                    mt.Status.setFailMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             },
 
-            setWarningMsg: function(){
-                var mt = TF.Core.Config.mentor;
+            setWarningMsg: function(appName){
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.setWarningMsg)){
-                    mt.Status.setWarningMsg.apply(mt.Status, arguments);
+                    mt.Status.setWarningMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             },
 
-            setLoadingMsg: function() {
-                var mt = TF.Core.Config.mentor;
+            setLoadingMsg: function(appName) {
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.setLoadingMsg)){
-                    mt.Status.setLoadingMsg.apply(mt.Status, arguments);
+                    mt.Status.setLoadingMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             },
 
-            unsetLoadingMsg: function() {
-                var mt = TF.Core.Config.mentor;
+            unsetLoadingMsg: function(appName) {
+                var mt = cfg[appName].mentor;
+
                 if (mt.Status && isfun(mt.Status.unsetLoadingMsg)){
-                    mt.Status.unsetLoadingMsg.apply(mt.Status, arguments);
+                    mt.Status.unsetLoadingMsg.apply(mt.Status, [].slice.call(arguments, 1));
                 }
             }
         };
@@ -116,13 +225,13 @@
 
     // 模板渲染相关的方法
     mentor.Template = function(){
-        var isfun = QW.ObjectH.isFunction;
+        var isfun = $.isFunction;
 
         var exports = {
-            render: function(text, opts) {
-                var mt = TF.Core.Config.mentor;
+            render: function(appName, text, opts) {
+                var mt = TF.Config[appName].mentor;
                 if (mt.Template && isfun(mt.Template.render)){
-                    return mt.Template.render.apply(mt.Template, arguments);
+                    return mt.Template.render.apply(mt.Template, [].slice.call(arguments, 1));
                 }
                 else {
                     return text.tmpl(text, opts);
@@ -136,14 +245,14 @@
 
     // Ajax 相关的一些方法，目前主要是接口调用是否成功的验证
     mentor.Ajax = function(){
-        var isfun = QW.ObjectH.isFunction;
+        var isfun = $.isFunction;
 
         var exports = {
 
-            validation: function(jsonObject){
-                var mt = TF.Core.Config.mentor;
+            validation: function(appName, jsonObject){
+                var mt = TF.Config[appName].mentor;
                 if (mt.Ajax && isfun(mt.Ajax.validation)){
-                    return mt.Ajax.validation.apply(mt.Ajax, arguments);
+                    return mt.Ajax.validation.apply(mt.Ajax, [].slice.call(arguments, 1));
                 }
                 else {
                     return true;
@@ -155,22 +264,6 @@
         return exports;
     }();
 
-
-
-    // 不是数组的话转成数组，如果是数组原样返回
-    var toArray = function (source) {
-        if (source === null || source === undefined)
-            return [];
-        if (Object.isArray(source))
-            return source;
-
-        // The strings and functions also have 'length'
-        if (typeof source.length !== 'number' || typeof source === 'string' || Object.isFunction(source)) {
-            return [source];
-        }
-
-        return [].slice.call(source);
-    };
 
 
     // mix 升级版，支持多级 mix
@@ -206,55 +299,78 @@
 
     // 实用工具静态类，包括一些常用例程
     TF.Helper.Utility = {
-        baseUrl: function(){
-            return TF.Core.Config.baseUrl;
+        baseUrl: function(appName) {
+            appName = appName || defaultApplicationName;
+            return TF.Config[appName].baseUrl;
         },
 
-        siteUrl: function(uri){
+        siteUrl: function(appName, uri){
+            appName = appName || defaultApplicationName;
+
             if (uri.indexOf('http://') === 0) { return uri; }
-            else { return TF.Core.Config.baseUrl + uri; }
+            else { return TF.Config[appName].baseUrl + uri; }
         },
 
-        getApplicationPath: function() {
-            return TF.Core.Config.name ? TF.Core.Config.name.toLowerCase() + '/' : '';
+        // 根据组件名取得 Application Name
+        getApplicationName: function(name) {
+            var appName;
+
+            // 分析组件名中是否有 Application Name
+            if (name.indexOf(':') > 0) {
+                appName = name.split(':')[0];
+            }
+            else {
+                appName = defaultApplicationName;
+            }
+
+            return appName.capitalize();
         },
 
-        getComponentUrl: function(uri, name) {
-            var pattern = TF.Core.Config.dataUriPattern;
-            var names = TF.Helper.Utility.getComponentNameArray(name);
+        getComponentUrl: function(appName, uri, name) {
+            var cfg = TF.Config[appName];
+
+            // 通过 Application Name 得到相应的配置信息
+            var pattern = cfg.dataUriPattern;
+            var names = TF.Helper.Utility.splitComponentName(name);
 
             var str = pattern.tmpl({
                 name: names,
                 uri: uri
             });
 
-            return TF.Helper.Utility.baseUrl() + str;
+            return cfg.baseUrl + str;
         },
 
-        getComponentViewUrl: function(name) {
-            var pattern = TF.Core.Config.templateUriPattern;
-            var names = TF.Helper.Utility.getComponentNameArray(name);
+        getComponentViewUrl: function(appName, name) {
+            var cfg = TF.Config[appName];
+
+            // 通过 Application Name 得到相应的配置信息
+            var pattern = cfg.templateUriPattern;
+            var names = TF.Helper.Utility.splitComponentName(name);
             var str = pattern.tmpl({
                 name: names
             });
 
-            return TF.Helper.Utility.baseUrl() + str;
+            return cfg.baseUrl + str;
         },
 
-        getComponentJsUrl: function(name) {
-            var pattern = TF.Core.Config.jsUriPattern;
-            var names = TF.Helper.Utility.getComponentNameArray(name);
+        getComponentJsUrl: function(appName, name) {
+            var cfg = TF.Config[appName];
+
+            // 通过 Application Name 得到相应的配置信息
+            var pattern = cfg.jsUriPattern;
+            var names = TF.Helper.Utility.splitComponentName(name);
 
             var str = pattern.tmpl({
                 name: names,
-                ver: TF.Core.Config.resourceVersion
+                ver: cfg.resourceVersion
             });
 
-            return TF.Helper.Utility.baseUrl() + str;
+            return cfg.baseUrl + str;
         },
 
-        getDefaultDataUri: function() {
-            return TF.Core.Config.defaultDataUri;
+        getDefaultDataUri: function(appName) {
+            return TF.Config[appName].defaultDataUri;
         },
 
         // 生成随机数字字符串
@@ -263,18 +379,53 @@
         },
 
         // 转成大小写形式的组件名
+        // hulk:abc-def 转换成 Hulk:AbcDef
         toComponentName: function(uriName) {
-            return uriName.camelize().capitalize();
+            var appName;
+            var name;
+            var tmp;
+
+            // 分析组件名中是否有 Application Name
+            if (uriName.indexOf(':') > 0) {
+                tmp = uriName.split(':');
+
+                appName = tmp[0];
+                name = tmp[1];
+
+                return appName.capitalize() + ':' + name.camelize().capitalize();
+            }
+            else {
+                return uriName.camelize().capitalize();
+            }
         },
 
         // 转成小写分隔符形式的组件名
+        // Hulk:AbcDef 转换成 hulk:abc-def
         toComponentUriName: function(name, sep) {
-            return name.replace(/[A-Z]/g, function(a) {
-                return (sep || '-') + a.toLowerCase();
+            var appName;
+            var tmp;
+            var result = '';
+
+            sep = sep || '-';
+
+            // 分析组件名中是否有 Application Name
+            if (name.indexOf(':') > 0) {
+                tmp = name.split(':');
+
+                appName = tmp[0];
+                name = tmp[1];
+
+                result = appName.toLowerCase() + ':';
+            }
+
+            result += name.replace(/[A-Z]/g, function(a) {
+                return sep + a.toLowerCase();
             }).slice(1);
+
+            return result;
         },
 
-        getComponentNameArray: function(name) {
+        splitComponentName: function(name) {
             var result = [];
             name.replace(/([A-Z][a-z]*)/g, function(a) {
                 result.push(a.toLowerCase());
@@ -284,9 +435,17 @@
 
         // 从组件全名取得组件详细名称
         getComponentName: function(name) {
-            return name;
-        }
+            // 分析组件名中是否有 Application Name
+            if (name.indexOf(':') > 0) {
+                name = name.split(':')[1];
+            }
 
+            return name;
+        },
+
+        getFullComponentName: function(name) {
+            return TF.Helper.Utility.getApplicationName(name) + ':' + TF.Helper.Utility.getComponentName(name);
+        }
     };
 
 
@@ -319,7 +478,7 @@
         },
 
         combine: function(properties, override){
-            Object.mix(this.data, properties || {}, override);
+            mix(this.data, properties || {}, override);
 
             return this;
         },
@@ -418,7 +577,7 @@
             // IE8 in IE7 mode defines window.onhashchange, but never fires it...
             if (this.supports) {
                 // The HTML5 way of handling DHTML history...
-                W(window).on('hashchange', function() {
+                $(window).on('hashchange', function() {
                     if (self.noFireOnce) {
                         self.noFireOnce = false;
                         return;
@@ -572,7 +731,7 @@
                 return;
             }
 
-            this.handle = setInterval(bind(this.checkHash, this), 200);
+            this.handle = setInterval(proxy(this.checkHash, this), 200);
             this.started = true;
 
             return this;
@@ -587,9 +746,28 @@
     // 应用程序部分
     var appReady = false;
     var appSubscriptions = new TF.Library.Hash();
+    var defaultApplicationName = '';
+
     TF.Core.Application = {
-        create: function(config) {
-            mix(TF.Core.Config, config, true);
+        create: function(name, config) {
+            var appName = 'Transformers';
+            var appConfig;
+
+            if (Object.isString(name)) {
+                appName = name;
+                appConfig = config;
+            }
+            else {
+                appConfig = name;
+            }
+
+            TF.Config[appName] = mix({}, defaultConfig, true);
+            mix(TF.Config[appName], appConfig, true);
+
+            // 首次创建的应用为默认应用
+            if (!defaultApplicationName) {
+                defaultApplicationName = appName;
+            }
         },
 
         isReady: function() {
@@ -638,39 +816,37 @@
             });
 
             //console.log(components);
-            if (components.length == 0) {
-                return;
-            }
+            if (components.length > 0) {
+                var args;
+                var name;
+                var attributes;
+                var exclude = ['id', 'class', 'style'];
 
-            var args;
-            var name;
-            var attributes;
-            var exclude = ['id', 'class', 'style'];
+                components.forEach(function(el){
+                    el = W(el);
 
-            components.forEach(function(el){
-                el = W(el);
+                    args = {};
 
-                args = {};
+                    name = TF.Helper.Utility.toComponentName(el.attr('tagName').toLowerCase().slice(3));
 
-                name = TF.Helper.Utility.toComponentName(el.attr('tagName').toLowerCase().slice(3));
+                    //console.log(el[0].attributes);
+                    attributes = $.makeArray(el[0].attributes);
+                    //console.log(attributes);
 
-                //console.log(el[0].attributes);
-                attributes = Array.toArray(el[0].attributes);
-                //console.log(attributes);
+                    attributes.forEach(function(item){
+                        if (!exclude.contains(item.name)) {
+                            args[item.name.camelize()] = ((item.name == item.value || item.value === '') ? true : item.value);
+                        }
+                    });
 
-                attributes.forEach(function(item){
-                    if (!exclude.contains(item.name)) {
-                        args[item.name.camelize()] = (item.name == item.value ? true : item.value);
-                    }
+                    //console.log(args);
+                    args.name = name;
+                    args.replaceRender = true;
+                    args.renderTo = el;
+
+                    componentMgr.add(args);
                 });
-
-                //console.log(args);
-                args.name = name;
-                args.replaceRender = true;
-                args.renderTo = el;
-
-                componentMgr.add(args);
-            });
+            }
 
             componentMgr.startLoad();
         }
@@ -710,7 +886,7 @@
             this._instance = null;
             this._instanced = false;
             this.fullName = this.options.name;
-
+            this.appName = TF.Helper.Utility.getApplicationName(this.options.name);
             this.name = TF.Helper.Utility.getComponentName(this.options.name);
 
             // 注册到组件管理器
@@ -722,25 +898,23 @@
         },
 
         _preload: function() {
-//            // 判断是否有 deriveFrom 参数
-//            if (this.options.deriveFrom) {
-//                //
-//            }
+            // Application Name 不存在则创建
+            TF.Component[this.appName] = TF.Component[this.appName] || {};
 
-            var isLoad = (typeof TF.Component[this.name] != 'undefined');
+            var isLoad = (typeof TF.Component[this.appName][this.name] != 'undefined');
             if (isLoad) {
                 this._createInstance();
             }
             else {
-                QW.loadJs(TF.Helper.Utility.getComponentJsUrl(this.name), bind(function(){
-                    if (typeof TF.Component[this.name] != 'undefined') {
+                $.getScript(TF.Helper.Utility.getComponentJsUrl(this.appName, this.name), proxy(function(){
+                    if (typeof TF.Component[this.appName][this.name] != 'undefined') {
                         // 加载成功
                         this._createInstance();
                     }
                     else {
                         // 加载失败
                         // 应该返回错误，或者记录日志
-                        this.fire('failure', {instance: null, fullName: this.fullName, name: this.name});
+                        this._failure();
                     }
                 }, this));
             }
@@ -749,152 +923,59 @@
         // 创建当前内容的名字空间实例
         _createInstance: function() {
             try {
-                this._instance = new TF.Component[this.name](this.options);
+                this._instance = new TF.Component[this.appName][this.name](this.options);
             }
             catch(e) {
             }
 
             if (!this._instance) {
-                //alert('组件装载出错，请刷新页面。');
-                this.fire('failure', {instance: null, fullName: this.fullName, name: this.name});
+                this._failure();
             }
 
             this._funcs = [];
-            this._loadMentor(bind(this._initInstance, this));
-
-//            // 看看组件是否借用其他组件的方法和属性
-//            if (this._instance.Mentor) {
-//                var viewName = TF.Helper.Utility.getComponentName(this._instance.Mentor.name);
-//                this._instance.Mentor.viewName = viewName;
-//
-//                var isLoad = (typeof TF.Component[viewName] != 'undefined');
-//                var me = this;
-//
-//                if (isLoad) {
-//                    this._initInstance(TF.Component[viewName]);
-//                }
-//                else {
-//                    QW.loadJs(TF.Helper.Utility.getComponentJsUrl(viewName), function(){console.log(TF.Component[viewName].prototype.Mentor);
-//                        if (typeof TF.Component[viewName] != 'undefined') {
-//                            // 加载成功
-//                            me._initInstance(TF.Component[viewName]);
-//                        }
-//                        else {
-//                            me._initInstance();
-//                        }
-//                    });
-//                }
-//            }
-//            else {
-//                this._initInstance();
-//            }
-        },
-
-        _initInstance: function(mentorClass) {
-            // 组件实例化正确才加载内容
-            this._instanced = true;
-
-            // 把加载器的配置传递到组件实例的sys空间里
-            mix(this._instance.sys.options, this.options, function(des, src, key){
-                if (key == 'data') {
-                    if (Object.isPlainObject(src)) {
-                        if (!des) {
-                            des = {};
-                        }
-                        return mix(des, src, true);
-                    }
-                    else {
-                        return des;
-                    }
-                }
-                else {
-                    return src;
-                }
-            });
-
-//
-//            if (mentorClass) {
-//                var me = this;
-//                mix(this._instance, mentorClass.prototype, function(des, src, key){
-//                    if (TF.Component[me.name].prototype.hasOwnProperty(key)) {
-//                        return des;
-//                    }
-//                    else {
-//                        return src;
-//                    }
-//                });
-//
-//                // 设置是否使用借用组件的视图
-//                if (this._instance.Mentor.useMentorView) {
-//                    this._instance.sys.viewName = this._instance.Mentor.viewName;
-//                }
-//                else if (this._instance.Mentor.useView) {
-//                    this._instance.sys.viewName = TF.Helper.Utility.getComponentName(this._instance.Mentor.useView);
-//                }
-//
-//                this._instance.sys.options.data = this._instance.sys.options.data || {};
-//                mix(this._instance.sys.options.data, this._instance.Mentor.viewData, true);
-//            }
-
-            this._instance.sys.hidden = this.options.hide;
-            this._instance.sys.fullName = this.fullName;
-            this._instance.sys.name = this.name;
-            this._instance.sys.index = this.options.__index || 0;
-            // 组件需要知道自己的父级组件管理器是谁
-            this._instance.sys.parentComponentMgr = this.componentMgrInstance;
-
-            // 实例准备就绪
-            this._instance.InstanceReady(this);
-
-            //this.componentMgrInstance.loaded(this.fullName, this._instance);
-
-            this.fire('instanced', {instance: this._instance, fullName: this.fullName, name: this.name});
-
-            // 看是否是延迟渲染
-            if (!this.options.lazyRender) {
-                this._instance.sys.render();
-            }
-
-            this.fire('complete', {instance: this._instance, fullName: this.fullName, name: this.name});
+            this._loadMentor(proxy(this._initInstance, this));
         },
 
         // 组件依赖分析，根据依赖加载相应组件
         // 返回组件实例
-        _loadMentor: function(callback, name, parentClass) {
+        _loadMentor: function(callback, fullName, parentClass) {
             var mentor;
             var me = this;
+            var appName
+            var name;
 
-            if (name) {
-                name = TF.Helper.Utility.getComponentName(name);
+            if (fullName) {
+                appName = TF.Helper.Utility.getApplicationName(fullName);
+                name = TF.Helper.Utility.getComponentName(fullName);
 
-                var isLoad = (typeof TF.Component[name] != 'undefined');
+                var isLoad = (typeof TF.Component[appName][name] != 'undefined');
 
                 if (isLoad) {
-                    mentor = TF.Component[name].prototype.Mentor;
+                    mentor = TF.Component[appName][name].prototype.Mentor;
                     if (mentor && mentor.name) {
                         me._loadMentor(function(){
-                            me._initMentor(name, parentClass, TF.Component[name]);
+                            me._initMentor(fullName, parentClass, TF.Component[appName][name]);
                             callback.call();
-                        }, mentor.name, TF.Component[name]);
+                        }, mentor.name, TF.Component[appName][name]);
                     }
                     else {
-                        me._initMentor(name, parentClass, TF.Component[name]);
+                        me._initMentor(fullName, parentClass, TF.Component[appName][name]);
                         callback.call();
                     }
                 }
                 else {
-                    QW.loadJs(TF.Helper.Utility.getComponentJsUrl(name), function(){
-                        if (typeof TF.Component[name] != 'undefined') {
+                    $.getScript(TF.Helper.Utility.getComponentJsUrl(appName, name), function(){
+                        if (typeof TF.Component[appName][name] != 'undefined') {
                             // 加载成功
-                            mentor = TF.Component[name].prototype.Mentor;
+                            mentor = TF.Component[appName][name].prototype.Mentor;
                             if (mentor && mentor.name) {
                                 me._loadMentor(function(){
-                                    me._initMentor(name, parentClass, TF.Component[name]);
+                                    me._initMentor(fullName, parentClass, TF.Component[appName][name]);
                                     callback.call();
-                                }, mentor.name, TF.Component[name]);
+                                }, mentor.name, TF.Component[appName][name]);
                             }
                             else {
-                                me._initMentor(name, parentClass, TF.Component[name]);
+                                me._initMentor(name, parentClass, TF.Component[appName][name]);
                                 callback.call();
                             }
                         }
@@ -915,7 +996,7 @@
             }
         },
 
-        _initMentor: function(name, componentClass, mentorClass) {
+        _initMentor: function(fullName, componentClass, mentorClass) {
             var me = this;
 
             componentClass = componentClass || this._instance;
@@ -933,7 +1014,7 @@
                 // 设置是否使用借用组件的视图
                 if (componentClass.prototype.Mentor.useMentorView) {
                     componentClass.prototype.Mentor.useMentorView = false;
-                    componentClass.prototype.Mentor.useView = name;
+                    componentClass.prototype.Mentor.useView = fullName;
                 }
                 else if (componentClass.prototype.Mentor.useView) {
                     componentClass.prototype.Mentor.useView = mentorClass.prototype.Mentor.useView;
@@ -953,7 +1034,7 @@
                     componentClass.prototype.Mentor.__path = [];
                 }
 
-                componentClass.prototype.Mentor.__path.push(name);
+                componentClass.prototype.Mentor.__path.push(fullName);
             }
             else {
                 // 把最后一级的父类方法转换一下放入当前实例
@@ -965,7 +1046,7 @@
                 }
 
                 mix(this._instance, mentorClass.prototype, function(des, src, key){
-                    if (key == 'Mentor' || TF.Component[me.name].prototype.hasOwnProperty(key)) {
+                    if (key == 'Mentor' || TF.Component[me.appName][me.name].prototype.hasOwnProperty(key)) {
                         return des;
                     }
                     else {
@@ -979,25 +1060,80 @@
                         this._instance.sys.viewName = mentorClass.prototype.Mentor.useView;
                     }
                     else {
-                        this._instance.sys.viewName = name;
+                        this._instance.sys.viewName = fullName;
                     }
                 }
                 else if (this._instance.Mentor.useView) {
-                    this._instance.sys.viewName = TF.Helper.Utility.getComponentName(this._instance.Mentor.useView);
+                    this._instance.sys.viewName = this._instance.Mentor.useView;
                 }
 
                 if (mentorClass.prototype.Mentor && mentorClass.prototype.Mentor.__path) {
                     this._instance.Mentor.__path = mentorClass.prototype.Mentor.__path;
-                    this._instance.Mentor.__path.push(name);
+                    this._instance.Mentor.__path.push(fullName);
                 }
                 else {
-                    this._instance.Mentor.__path = [name];
+                    this._instance.Mentor.__path = [fullName];
                 }
 
                 this._instance.sys.options.data = this._instance.sys.options.data || {};
                 mix(this._instance.sys.options.data, this._instance.Mentor.viewData, true);
             }
 
+        },
+
+        _initInstance: function(mentorClass) {
+            // 组件实例化正确才加载内容
+            this._instanced = true;
+
+            // 把加载器的配置传递到组件实例的sys空间里
+            mix(this._instance.sys.options, this.options, function(des, src, key){
+                if (key == 'data') {
+                    if (Object.isPlainObject(src)) {
+                        if (!des) {
+                            des = {};
+                        }
+                        return mix(des, src, true);
+                    }
+                    else if (Object.isString(src)) {
+                        if (!des) {
+                            des = {};
+                        }
+                        return mix(des, src.queryUrl(), true);
+                    }
+                    else {
+                        return des;
+                    }
+                }
+                else {
+                    return src;
+                }
+            });
+
+            this._instance.sys.hidden = this.options.hide;
+            this._instance.sys.fullName = this.fullName;
+            this._instance.sys.appName = this.appName;
+            this._instance.sys.name = this.name;
+            this._instance.sys.index = this.options.__index || 0;
+            // 组件需要知道自己的父级组件管理器是谁
+            this._instance.sys.parentComponentMgr = this.componentMgrInstance;
+
+            // 实例准备就绪
+            this._instance.InstanceReady(this);
+
+            //this.componentMgrInstance.loaded(this.fullName, this._instance);
+
+            this.fire('instanced', {instance: this._instance, fullName: this.fullName, name: this.name, appName: this.appName});
+
+            // 看是否是延迟渲染
+            if (!this.options.lazyRender) {
+                this._instance.sys.render();
+            }
+
+            this.fire('complete', {instance: this._instance, fullName: this.fullName, name: this.name, appName: this.appName});
+        },
+
+        _failure: function() {
+            this.fire('failure', {instance: null, fullName: this.fullName, name: this.name, appName: this.appName});
         },
 
         getInstance: function() {
@@ -1017,7 +1153,7 @@
     var componentSys = {
         // 组件消息处理中心
         postMessage: function(msg, args) {
-            this.parentComponentMgr.publish(this.name + '[' + this.index + ']', msg, args);
+            var returnValue;
 
             // 如果组件还未渲染，则等待组件完成渲染，再传递最后一个消息
             if (!this.rendered) {
@@ -1045,13 +1181,14 @@
                 if (!this.rendering) {
                     this.render();
                 }
+
                 return;
             }
             //if (!$defined(args)) args = {};
 
             // before 用于处理消息返回值，表示是否继续传递消息
-            var is_continue = true,
-                funcName = msg.camelize();
+            var is_continue = true;
+            var funcName = msg.camelize();
 
             // 传递处理过的参数给 Action
             var filteredArgs = args;
@@ -1102,15 +1239,29 @@
 
             // 把消息派发到组件实例中
             if (this.instance && Object.isFunction(this.instance[funcName + 'Action'])) {
-                this.instance[funcName + 'Action'].call(this.instance, filteredArgs, args);
+                returnValue = this.instance[funcName + 'Action'].call(this.instance, filteredArgs, args);
             }
+
+            this.parentComponentMgr.publish(this.name + '[' + this.index + ']', msg, args);
+
+            return returnValue;
         },
 
         // 系统路由处理函数
         route: function(args) {
-            if (this.layoutType == 'normal') {
-                this.postMessage('component-only-show');
+            var notRefresh = false;
 
+//            if (JSON.stringify(this.lastArgs) !== JSON.stringify(args)) {
+//                this.lastArgs = args;
+//                notRefresh = false;
+//            }
+
+            // 如果现在路由到其他组件了，则不显示组件
+            if (TF.Helper.Utility.getFullComponentName(TF.Core.Router.parseUri().name) == TF.Helper.Utility.getFullComponentName(this.fullName)) {
+                this.postMessage('component-only-show');
+            }
+
+            if (this.layoutType == 'normal') {
                 if (args) {
                     // 传递页数给 fn 函数
                     this.layoutData.page = this.getUriPage(args);
@@ -1119,11 +1270,9 @@
                     this.layoutData.page = 0;
                 }
 
-                this.renderNormalLayout();
+                this.renderNormalLayout(false, null, notRefresh);
             }
             else if (this.layoutType == 'tab') {
-                this.postMessage('component-only-show');
-
                 if (args) {
                     var index = this.layoutData.tabs.get(this.getUriTab(args)) || 0;
 
@@ -1136,10 +1285,9 @@
                     this.layoutData.tab.switchTo(0);
                 }
 
-                this.renderTabLayout();
+                this.renderTabLayout(false, null, notRefresh);
             }
             else {
-                this.postMessage('component-only-show');
             }
         },
 
@@ -1194,12 +1342,11 @@
             }
             if (this.options.applyTo) {
                 //直接渲染
-                this._loadComplete(W(this.options.applyTo));
+                this._loadComplete($(this.options.applyTo));
             }
             else if (this.options.contentEl) {
-
                 //直接渲染
-                this._loadComplete(W(this.options.contentEl).cloneNode(true));
+                this._loadComplete($(this.options.contentEl).clone());
             }
             else {
                 this._loadContent();
@@ -1222,10 +1369,12 @@
         // 装载组件模板
         _loadContent: function() {
             if (this.options.url == '') {
-                this.options.url = TF.Helper.Utility.getComponentViewUrl(this.viewName || this.name);
+                this.options.url = (this.viewName ?
+                                    TF.Helper.Utility.getComponentViewUrl(TF.Helper.Utility.getApplicationName(this.viewName),
+                                    TF.Helper.Utility.getComponentName(this.viewName)) : TF.Helper.Utility.getComponentViewUrl(this.appName, this.name));
             }
             else if (this.options.url.indexOf("http:/"+"/") < 0) {
-                this.options.url = TF.Helper.Utility.siteUrl(this.options.url);
+                this.options.url = TF.Helper.Utility.siteUrl(this.appName, this.options.url);
             }
 
             if (!this.options.hasCache) {
@@ -1233,27 +1382,26 @@
                 this.options.data['_reqno'] = TF.Helper.Utility.random();
             }
 
-            if (!this.loader) {
-                this.loader = new QW.Ajax({
-                    url: this.options.url,
-                    data: this.options.data,
-                    method: 'get',
-                    timeout: 10000,
-                    onsucceed: bind(this._loadComplete, this),
-                    onerror: bind(function() {
-                        //this.loadError('4. Ajax Error!');
-                    }, this)
-                });
-            }
+            this.loader = $.ajax(this.options.url, {
+                data: this.options.data,
+                type: 'GET',
+                timeout: 10000,
+                xhrFields: {
+                    'withCredentials': true
+                },
+                success: proxy(this._loadComplete, this),
+                error: proxy(function() {
+                    //this.loadError('4. Ajax Error!');
+                    //this.unsetLoadingMsg();
+                }, this)
+            });
 
-            this.loader.send();
+            //this.setLoadingMsg();
         },
 
-        _loadComplete: function(ajaxEvent) {
-            // TODO: 这里有BUG
-
+        _loadComplete: function(responseText, textStatus, jqXHR) {
             // 如果是取消的请求，则什么也不做，我们只关心真正请求回来的数据，而不关心请求的状态
-            if (ajaxEvent.target.state == QW.Ajax.STATE_CANCEL) {
+            if (jqXHR && jqXHR.statusText == 'canceled') {
                 return;
             }
 
@@ -1263,15 +1411,15 @@
 
             var response, responseTree;
 
-            response = ajaxEvent.responseText;
+            response = responseText;
 
             if (Object.isString(response)) {
                 // 解决 IE 下 innerHTML 不能直接设置 script 的问题
-                if (QW.Browser.ie) {
+                if ((/msie/ig).test(window.navigator.userAgent.toLowerCase())) {
                     response = response.replace(/(<div\s+class="TFComponent"\s*>)/ig, '$1<div style="display:none">tf</div>');
                 }
 
-                responseTree = W(Dom.createElement('div')).html(response).query('.TFComponent');
+                responseTree = $('<div></div>').html(response).find('.TFComponent');
             }
             else if (Object.isWrap(response)) {
                 responseTree = response.first();
@@ -1304,7 +1452,7 @@
                 this.topElement.hide();
             }
 
-            var renderTo = W(this.options.renderTo);
+            var renderTo = $(this.options.renderTo);
 
             // 放入 DOM 树中
             if (!this.refreshing) {
@@ -1318,7 +1466,7 @@
                         // 复制 class
                         var cls = renderTo[0].attributes.getNamedItem('class');
                         if (cls) {
-                            cls.value.split(' ').forEach(function(v){
+                            $.each(cls.value.split(' '), function(i, v){
                                 W(element).addClass(v);
                             });
                         }
@@ -1328,13 +1476,13 @@
                         if (style) {
                             var namedItem = document.createAttribute("style");
                             namedItem.value = style.value;
-                            W(element)[0].attributes.setNamedItem(namedItem);
+                            $(element)[0].attributes.setNamedItem(namedItem);
                         }
 
-                        renderTo.replaceNode(element);
+                        renderTo.replaceWith(element);
                     }
                     else {
-                        renderTo.appendChild(element);
+                        renderTo.append(element);
                     }
                 }
             }
@@ -1350,13 +1498,13 @@
 
                 if (data.length > 0) {
                     try {
-                        obj = QW.JSON.parse(data.html());
+                        obj = $.parseJSON(data.html());
                     } catch (e) {}
                 }
 
                 if (obj && template.length > 0) {
                     // 是客户端渲染，执行模板操作
-                    this.query().html(mentor.Template.render(template.html(), {'ComponentData': obj}));
+                    this.query().html(mentor.Template.render(this.appName, template.html(), {'ComponentData': obj}));
                 }
 
                 this.instance.options['TFData'] = obj;
@@ -1364,10 +1512,15 @@
                 // 自动提取页面中的 options 值
                 var options = this.query('.tf-options');
                 var name, tag;
-                options.forEach(function(e){
+                $.each(options, function(i, e){
                     e = W(e);
                     name = e.attr('name');
-                    tag = e.attr('tagName').toLowerCase();
+
+                    if (!name) {
+                        return;
+                    }
+
+                    tag = e.prop('tagName').toLowerCase();
                     if (tag == 'input' || tag == 'textarea') {
                         this.instance.options[name] = e.val();
                     }
@@ -1376,7 +1529,7 @@
                     }
                 }, this);
 
-                this.instance.fire('complete', {instance: this.instance, fullName: this.fullName, name: this.name});
+                $.event.trigger('complete', this._getEventObject(), this.instance);
 
                 // 页面全部装载完成！
                 if (this.refreshing) {
@@ -1388,7 +1541,7 @@
 
                     // 先加载子组件，加载完毕后才是 DomRefreshReady
                     // 如果没有子组件，直接执行 DomRefreshReady
-                    this._loadSubComponents(bind(function(){
+                    this._loadSubComponents(proxy(function(){
 
                         this.instance.DomRefreshReady();
 
@@ -1399,7 +1552,7 @@
                         // 刷新完毕
                         this.refreshing = false;
 
-                        this.instance.fire('refreshReady', {instance: this.instance, fullName: this.fullName, name: this.name});
+                        $.event.trigger('refreshReady', this._getEventObject(), this.instance);
 
                     }, this));
 
@@ -1414,7 +1567,7 @@
 
                     // 先加载子组件，加载完毕后才是 DomReady
                     // 如果没有子组件，直接执行 DomReady
-                    this._loadSubComponents(bind(function(){
+                    this._loadSubComponents(proxy(function(){
 
                         this.instance.DomReady();
 
@@ -1438,7 +1591,7 @@
                             this.lastMessage = null;
                         }
 
-                        this.instance.fire('ready', {instance: this.instance, fullName: this.fullName, name: this.name});
+                        $.event.trigger('ready', this._getEventObject(), this.instance);
 
                     }, this));
 
@@ -1450,10 +1603,25 @@
                 // 刷新完毕
                 this.refreshing = false;
 
-                this.instance.fire('failure', {instance: this.instance, fullName: this.fullName, name: this.name});
+                $.event.trigger('failure', this._getEventObject(), this.instance);
+
+                if (TF.Config[this.appName].debug) {
+                    console.error && console.error('Component [' + this.getComponentName() + '] load error!');
+                }
+
+                this.instance.LoadError();
             }
 
             return true;
+        },
+
+        _getEventObject: function() {
+            return {
+                instance: this.instance,
+                fullName: this.fullName,
+                name: this.name,
+                appName: this.appName
+            };
         },
 
         _loadError: function(msg) {
@@ -1468,16 +1636,17 @@
             var me = this;
             for (var key in configs) {
                 value = configs[key];
-                if (Object.isFunction(value)) {
+                if ($.isFunction(value)) {
                     value = {"click": value};
                 }
                 for (var type in value) {
-                    this.topElement.delegate(key, type, (function(e){
+                    this.topElement.delegate(key, type, (function(){
                         var func = value[type];
-                        if (Object.isString(func)) {
+                        if ($.type(func) == 'string') {
                             func = me.instance[func];
                         }
                         return function(ev) {
+                            ev.stopPropagation();
                             return func.call(this, ev, me.instance);
                         };
                     })());
@@ -1487,8 +1656,8 @@
 
         // 获取视图里绑定的数据
         _getBindingData: function(element) {
-            var el = W(element);
-            var bindingElement = el.hasClass('tf-bind') ? el : el.parentNode('.tf-bind');
+            var el = $(element);
+            var bindingElement = el.hasClass('tf-bind') ? el : el.parents('.tf-bind');
             var data = {};
             var binding = '';
             var targetElement;
@@ -1499,7 +1668,7 @@
 
             if (bindingElement.length > 0) {
                 // 这里可以通过自动查找 target name 实现无需在 data-bind 里填写模版名
-                targetElement = el.parentNode('[class|=TFTarget]');
+                targetElement = el.parents('[class|=TFTarget]');
 
                 if (targetElement.length > 0) {
                     // 解析 Target 名称
@@ -1517,10 +1686,10 @@
 
                 // 找到了绑定数据的DOM节点
                 // 解析绑定数据
-                binding = bindingElement.attr('data-bind') || 'null';
+                binding = bindingElement.data('bind') || 'null';
                 //console.log(this.templateData);
                 //console.log('opts' + targetName + '.' + binding);
-                data = ('opts' + targetName + '.' + binding).evalExp(this.templateData);
+                data = evalExp('opts' + targetName + '.' + binding, this.templateData);
             }
 
             return data;
@@ -1528,7 +1697,10 @@
 
         _delegateJsAction: function(){
             var me = this;
-            this.topElement.delegate('[tf-action-click]', 'click', function(e){
+
+            this.topElement.delegate('[tf-action-click]', 'click', function(e) {
+                e.stopPropagation();
+
                 if (this.tagName.toLowerCase() == 'a') {
                     e.preventDefault();
                 }
@@ -1538,13 +1710,13 @@
                 // 解析参数
                 var match = /(.*?)\((.*)\)/.exec(action);
                 if (match) {
-                    action = match[1].trim();
+                    action = $.trim(match[1]);
                     if (match[2] != '') {
-                        args = match[2].evalExp();
+                        args = evalExp(match[2]);
                     }
                 }
 
-                if (Object.isObject(args)) {
+                if ($.isPlainObject(args)) {
                     args.__event = e;
                     args.__element = this;
                     args.__data = me._getBindingData(this);
@@ -1557,7 +1729,9 @@
         _delegateJsEvent: function(){
             var me = this;
 
-            this.topElement.delegate('.tf-click', 'click', function(e){
+            this.topElement.delegate('.tf-click', 'click', function(e) {
+                e.stopPropagation();
+
                 if (this.tagName.toLowerCase() == 'a') {
                     e.preventDefault();
                 }
@@ -1570,18 +1744,23 @@
 
                 e.__data = me._getBindingData(this);
 
-                var eventName = W(this).attr('tf-event-click').camelize();
-                if (me.instance && Object.isFunction(me.instance[eventName + 'Event'])) {
+                var eventName = $.camelCase($(this).attr('tf-event-click'));
+                if (me.instance && $.isFunction(me.instance[eventName + 'Event'])) {
                     return me.instance[eventName + 'Event'].call(this, e, me.instance);
                 }
             });
 
-            this.topElement.delegate('.tf-change', 'change', function(e){
+            this.topElement.delegate('.tf-change', 'change', function(e) {
+                e.stopPropagation();
+
                 e.__data = me._getBindingData(this);
 
-                var eventName = W(this).attr('tf-event-change').camelize();
-                if (me.instance && Object.isFunction(me.instance[eventName + 'Event'])) {
-                    return me.instance[eventName + 'Event'].call(this, e, me.instance);
+                var eventName = $(this).attr('tf-event-change');
+                if (eventName) {
+                    eventName = $.camelCase(eventName);
+                    if (me.instance && $.isFunction(me.instance[eventName + 'Event'])) {
+                        return me.instance[eventName + 'Event'].call(this, e, me.instance);
+                    }
                 }
             });
         },
@@ -1592,37 +1771,39 @@
             var me = this;
 
             if (form.length > 0) {
-                form.un('submit');
+                form.off('submit');
                 form.on('submit', function(event) {
                     event.preventDefault();
                     var f = form.query('button.tf-default').first();
                     if (f) {
-                        f.fire('click');
+                        f.trigger('click');
                     }
                 });
                 // 如果没有 type=submit 的按钮则添加一个
-                if (form.query('button.tf-default').attr('type') != 'submit') {
-                    form.appendChild(Dom.create('<div style="position:absolute;left:-9999px;top:-9999px;"><button type="submit"></button></div>'));
+                if (form.query('button[type=submit]').length == 0) {
+                    form.append($('<div style="position:absolute;left:-9999px;top:-9999px;"><button type="submit"></button></div>'));
                 }
             }
         },
 
         _setDefaultFocus: function() {
-            if (this.isHidden()) return;
+            if (this.isHidden()) {
+                return;
+            }
 
             var form = this.query('form.tf-focus');
             if (form.length > 0) {
                 var first = null;
                 var el, tag;
                 for (var i = 0, len = form[0].elements.length; i < len; i++) {
-                    el = W(form[0].elements[i]);
-                    tag = el.attr('tagName').toLowerCase();
+                    el = $(form[0].elements[i]);
+                    tag = el.prop('tagName').toLowerCase();
 
-                    if (tag == 'input' && el.attr('type') == 'text' && !el[0].readOnly && el.isVisible()) {
+                    if (tag == 'input' && el.attr('type') == 'text' && !el[0].readOnly && el.is(':visible')) {
                         first = el;
                         break;
                     }
-                    else if (tag == 'textarea' && !el[0].readOnly && el.isVisible()) {
+                    else if (tag == 'textarea' && !el[0].readOnly && el.is(':visible')) {
                         first = el;
                         break;
                     }
@@ -1645,10 +1826,10 @@
             });
 
             // 兼容方式获取子组件元素
-            var components1 = this.topElement.query('.tf-component');
+            var components1 = this.topElement.find('.tf-component');
             // 新式获取子组件元素
-            var components2 = this.topElement.query('*').filter(function(el){
-                return el.tagName.toLowerCase().indexOf('tf:') === 0;
+            var components2 = this.topElement.find('*').filter(function(){
+                return this.tagName.toLowerCase().indexOf('tf:') === 0;
             });
 
             if (components1.length == 0 && components2.length == 0) {
@@ -1662,8 +1843,8 @@
             var exclude = ['id', 'class', 'style'];
             var match;
 
-            components1.forEach(function(el){
-                el = W(el);
+            $.each(components1, function(i, el){
+                el = $(el);
 
                 args = {};
                 name = el.attr('tf-component-name') || '';
@@ -1671,9 +1852,9 @@
                 // 解析参数
                 match = /(.*?)\((.*)\)/.exec(name);
                 if (match) {
-                    name = match[1].trim();
+                    name = $.trim(match[1]);
                     if (match[2] != '') {
-                        args = match[2].evalExp();
+                        args = evalExp(match[2]);
                     }
                 }
 
@@ -1683,20 +1864,20 @@
                 me.componentMgr.add(args);
             });
 
-            components2.forEach(function(el){
-                el = W(el);
+            $.each(components2, function(i, el){
+                el = $(el);
 
                 args = {};
 
-                name = TF.Helper.Utility.toComponentName(el.attr('tagName').toLowerCase().slice(3));
+                name = TF.Helper.Utility.toComponentName(el.prop('tagName').toLowerCase().slice(3));
 
                 //console.log(el[0].attributes);
-                attributes = Array.toArray(el[0].attributes);
+                attributes = $.makeArray(el[0].attributes);
                 //console.log(attributes);
 
-                attributes.forEach(function(item){
-                    if (!exclude.contains(item.name)) {
-                        args[item.name.camelize()] = (item.name == item.value ? true : item.value);
+                $.each(attributes, function(i, item){
+                    if (!$.inArray(item.name, exclude)) {
+                        args[$.camelCase(item.name)] = ((item.name == item.value || item.value === '') ? true : item.value);
                     }
                 });
 
@@ -1705,7 +1886,7 @@
                 args.replaceRender = true;
                 args.renderTo = el;
 
-                componentMgr.add(args);
+                me.componentMgr.add(args);
             });
 
             this.componentMgr.startLoad(true);
@@ -1717,7 +1898,7 @@
                 return;
             }
 
-            el = W(el);
+            el = $(el);
             setTimeout(function(){
                 try {
                     if (el.length > 0) {
@@ -1737,14 +1918,14 @@
 
                 var func = function(uri) {
                     var reg, isMatch = false;
-                    routerItems.some(function(item, index) {
-                        Object.map(item, function(value, key, obj){
+                    $.each(routerItems, function(index, item) {
+                        $.each(item, function(key, value){
                             key = key.replace(/:num/gi, '[0-9]+');
                             key = key.replace(/:any/gi, '.*');
 
                             reg = new RegExp('^' + key + '$');
                             if (uri.match(reg)) {
-                                if (value.contains('$') && key.contains('(')) {
+                                if (value.indexOf('$') >= 0 && key.indexOf('(') >= 0) {
                                     value = uri.replace(reg, value);
                                 }
                                 isMatch = true;
@@ -1753,7 +1934,7 @@
                         });
 
                         if (isMatch) {
-                            return true;
+                            return false;
                         }
                     });
 
@@ -1776,30 +1957,30 @@
 
         query: function(selector) {
             if (this.topElement) {
-                return this.topElement.query(selector);
+                return this.topElement.find(selector);
             }
             else {
-                return new NodeW([]);
+                return $();
             }
         },
 
         _setTopElement: function(el, prefix) {
             prefix = prefix || 'transformers_id';
-            this.topElement = W(el).attr('id', prefix + '_' + TF.Helper.Utility.random())
-                              .addClass('g-tf-' + TF.Helper.Utility.toComponentUriName(this.fullName));
+            this.topElement = $(el).attr('id', prefix + '_' + TF.Helper.Utility.random())
+                              .addClass('g-tf-' + TF.Helper.Utility.toComponentUriName(this.fullName).replace(':', '-'));
 
             if (this.instance.Mentor && this.instance.Mentor.__path) {
                 var path = this.instance.Mentor.__path;
 
                 for (var i = path.length - 1; i >= 0; i--) {
-                    this.topElement.addClass('g-tf-' + TF.Helper.Utility.toComponentUriName(path[i]));
+                    this.topElement.addClass('g-tf-' + TF.Helper.Utility.toComponentUriName(path[i]).replace(':', '-'));
                 }
             }
         },
         _unsetTopElement: function() {
             if (this.topElement && this.topElement.length > 0)
             {
-                this.topElement.parentNode().empty();
+                this.topElement.parent().empty();
                 this.topElement = null;
             }
         },
@@ -1810,22 +1991,22 @@
         setLoadingMsg: function(msg) {
             //if (this._isLoadingMsg) return;
             //this._isLoadingMsg = true;
-            mentor.Status.setLoadingMsg(msg, this.instance);
+            mentor.Status.setLoadingMsg(this.appName, msg, this.instance);
         },
         unsetLoadingMsg: function() {
             //if (this._isLoadingMsg) return;
             //this._isLoadingMsg = true;
-            mentor.Status.unsetLoadingMsg(this.instance);
+            mentor.Status.unsetLoadingMsg(this.appName, this.instance);
         },
         setSuccMsg: function(msg) {
-            mentor.Status.setSuccMsg(msg, this.instance, {});
+            mentor.Status.setSuccMsg(this.appName, msg, this.instance, {});
         },
         setFailMsg: function(msg) {
-            mentor.Status.setFailMsg(msg, this.instance, {});
+            mentor.Status.setFailMsg(this.appName, msg, this.instance, {});
         },
 
         getUrl: function(uri) {
-            return TF.Helper.Utility.getComponentUrl(uri || '', this.name);
+            return TF.Helper.Utility.getComponentUrl(this.appName, uri || '', this.name);
         },
 
         // 封装组件内容 Request
@@ -1834,66 +2015,76 @@
                 url = this.getUrl(url);
             }
             else {
-                url = TF.Helper.Utility.siteUrl(url.slice(1));
+                url = TF.Helper.Utility.siteUrl(this.appName, url.slice(1));
             }
 
             var ajaxOptions = {
                 url: url,
-                method: 'get',
+                type: 'GET',
                 timeout: 10000,
-                oncomplete: bind(this._sendComplete, this.instance)
+                xhrFields: {
+                    'withCredentials': true
+                },
+                context: {
+                    instance: this.instance,
+                    options: mix({}, $.ajaxSettings)
+                },
+                complete: this._sendComplete
             };
             options = options || {};
-            if (Object.isFunction(options.fn)) {
+            if ($.isFunction(options.fn)) {
                 options.__TFCallback = options.fn;
                 delete options.fn;
             }
             mix(ajaxOptions, options, true);
 
-            if (Object.isWrap(ajaxOptions.data) && ajaxOptions.data.attr('tagName').toLowerCase() == 'form') {
-                ajaxOptions.data = ajaxOptions.data.encodeURIForm(null, ajaxOptions.withDisabledSelect);
+            if ($(ajaxOptions.data).prop('tagName').toLowerCase() == 'form') {
+                ajaxOptions.data = $(ajaxOptions.data).serialize({
+                    withDisabledSelect: ajaxOptions.withDisabledSelect
+                });
             }
 
-            if (!ajaxOptions.hasCache && ajaxOptions.method == 'get') {
+            if (!ajaxOptions.hasCache && ajaxOptions.type == 'get') {
                 ajaxOptions.data = ajaxOptions.data || {};
                 ajaxOptions.data['_reqno'] = TF.Helper.Utility.random();
             }
 
             // 如果已经发送请求，则取消上一个请求
             if (this.requester) {
-                this.requester.cancel();
+                this.requester.abort();
             }
 
-            this.requester = new QW.Ajax(ajaxOptions);
+            this.requester = $.ajax(ajaxOptions);
 
             if (options.loadingMsg !== false) {
                 this.setLoadingMsg(options.loadingMsg);
             }
-
-            this.requester.send();
         },
 
         // 装载完成
-        _sendComplete: function(ajaxEvent) {
-            if (ajaxEvent.target.loadingMsg !== false) {
-                this.sys.unsetLoadingMsg();
+        // 注意这里的 this 已经换成 ajax context 所指对象
+        _sendComplete: function(jqXHR) {//console.log(this);console.log(jqXHR)
+            var me = this.instance;
+
+            if (this.options.loadingMsg !== false) {
+                me.sys.unsetLoadingMsg();
             }
 
             // 如果是取消的请求，则什么也不做，我们只关心真正请求回来的数据，而不关心请求的状态
-            if (ajaxEvent.target.state == QW.Ajax.STATE_CANCEL) {
+            if (jqXHR.statusText == 'canceled') {
                 return;
             }
 
-            var response = ajaxEvent.responseText;
+            var response = jqXHR.responseText;
             var result = null;
 
             try {
-                result = QW.JSON.parse(response);
+                result = $.parseJSON(response);
             } catch (e) {}
 
             if (!result) {
-                if (ajaxEvent.target.state == QW.Ajax.STATE_TIMEOUT) {
-                    result = {'errno': 998, 'errmsg': 'Timeout Error!', data: []}; // 超时错误
+                if (jqXHR.statusText == 'timeout') {
+                    result = {'errno': 998, 'errmsg': 'Request timeout', data: []}; // 超时错误
                 }
                 else {
                     result = {'errno': 999, 'errmsg': 'Error!', data: []}; // 内部错误
@@ -1901,12 +2092,12 @@
             }
 
             // 输出调试信息
-            if (TF.Core.Config.debug) {
-                var param = Object.isString(ajaxEvent.target.data) ? ajaxEvent.target.data : Object.encodeURIJson(ajaxEvent.target.data);
-                console.debug && console.debug('url: ' + ajaxEvent.target.url + (param ? '?' + param : ''));
+            if (TF.Config[me.sys.appName].debug) {
+                //var param = Object.isString(jqXHR.target.data) ? jqXHR.target.data : Object.encodeURIJson(jqXHR.target.data);
+                //console.debug && console.debug('url: ' + jqXHR.target.url + (param ? '?' + param : ''));
             }
 
-            var isError = !mentor.Ajax.validation(result);
+            var isError = !mentor.Ajax.validation(me.sys.appName, result);
             var args;
 
             if (isError){
@@ -1922,18 +2113,18 @@
                 }, true);
             }
 
-            if (Object.isFunction(ajaxEvent.target.__TFCallback)) {
-                ajaxEvent.target.__TFCallback.call(this, !isError, args);
+            if ($.isFunction(this.options.__TFCallback)) {
+                this.options.__TFCallback.call(me, !isError, args);
             }
 
             if (isError) {
                 // 显示错误消息
-                mentor.Status.setFailMsg(args.message, this, args);
+                mentor.Status.setFailMsg(me.sys.appName, args.message, me, args);
             }
             else {
                 if (Object.isString(args.message)) {
                     // 显示成功消息
-                    mentor.Status.setSuccMsg(args.message, this, args);
+                    mentor.Status.setSuccMsg(me.sys.appName, args.message, me, args);
                 }
             }
         },
@@ -1945,19 +2136,38 @@
             args = args || {};
 
             // 支持渲染一批模板
-            name = toArray(name);
+            name = $.makeArray(name);
 
-            name.forEach(function(item){
+            $.each(name, function(index, item){
                 // 根据不同情况取 Target 名
-                if (Object.isString(item)) {
+                if ($.type(item) == 'string') {
                     html = this.query('.TFTemplate-' + item).html();
-                    this.query('.TFTarget-' + item).html(mentor.Template.render(html, args));
+                    this.query('.TFTarget-' + item).html(mentor.Template.render(this.appName, html, args));
                     this.templateData[item] = args;
                 }
-                else if (Object.isObject(item)) {
+                else if ($.isPlainObject(item)) {
                     templateName = item.template;
                     html = this.query('.TFTemplate-' + item.template).html();
-                    this.query('.TFTarget-' + item.target).html(mentor.Template.render(html, args));
+
+                    if ($.type(item.target) == 'string') {
+                        this.query('.TFTarget-' + item.target).html(mentor.Template.render(this.appName, html, args));
+                    }
+                    else {
+                        var targetElement = $(item.target);
+                        var match = /TFTarget-(\S+)/.exec(targetElement.attr('class'));
+                        var className;
+                        if (match) {
+                            className = match[1];
+                            $(item.target).html(mentor.Template.render(this.appName, html, args));
+                        }
+                        else {
+                            className = 'gen-' + TF.Helper.Utility.random();
+                            $(item.target).addClass('TFTarget-' + className).html(mentor.Template.render(this.appName, html, args));
+                        }
+
+                        item.target = className;
+                    }
+
                     this.templateData[item.template] = args;
                     this.templateData[item.target] = args;
                 }
@@ -1966,7 +2176,7 @@
 
         // 取得渲染后的模板内容
         getRenderedTemplate: function(name, args) {
-            return mentor.Template.render(this.query('.TFTemplate-' + name).html(), args || {});
+            return mentor.Template.render(this.appName, this.query('.TFTemplate-' + name).html(), args || {});
         },
 
         // 动态渲染模板，支持自动分页
@@ -1979,10 +2189,10 @@
                 this.setLoadingMsg(args.loadingMsg);
             }
 
-            var url = this.getUrl(actionName || TF.Helper.Utility.getDefaultDataUri());
+            var url = this.getUrl(actionName || TF.Helper.Utility.getDefaultDataUri(this.appName));
             var me = this;
 
-            name = toArray(name);
+            name = $.makeArray(name);
 
             if (args && args.data) {
                 args.old_data = args.data;
@@ -2013,11 +2223,11 @@
                 args.pageData = 'component_page=' + args.page;
             }
             if (args.pageData) {
-                if (Object.isObject(args.pageData)) {
-                    args.pageData = Object.encodeURIJson(args.pageData);
+                if ($.isPlainObject(args.pageData)) {
+                    args.pageData = $.param(args.pageData);
                 }
-                if (Object.isObject(args.old_data)) {
-                    args.old_data = Object.encodeURIJson(args.old_data);
+                if ($.isPlainObject(args.old_data)) {
+                    args.old_data = $.param(args.old_data);
                 }
                 args.data = args.old_data ? (args.old_data + '&' + args.pageData) : args.pageData;
             }
@@ -2025,23 +2235,42 @@
             var template = [], target = [], templateName = [], targetName = [];
 
             // 支持渲染一批模板
-            name.forEach(function(item){
-                if (Object.isString(item)) {
+            $.each(name, function(index, item){
+                if ($.type(item) == 'string') {
                     template.push(this.query('.TFTemplate-' + item));
                     target.push(this.query('.TFTarget-' + item));
                     templateName.push(item);
                     targetName.push(item);
                 }
-                else if (Object.isObject(item)) {
+                else if ($.isPlainObject(item)) {
                     template.push(this.query('.TFTemplate-' + item.template));
-                    target.push(this.query('.TFTarget-' + item.target));
+
+                    if ($.type(item.target) == 'string') {
+                        target.push(this.query('.TFTarget-' + item.target));
+                    }
+                    else {
+                        var targetElement = $(item.target);
+                        var className;
+                        var match = /TFTarget-(\S+)/.exec(targetElement.attr('class'));
+                        if (match) {
+                            className = match[1];
+                        }
+                        else {
+                            className = 'gen-' + TF.Helper.Utility.random();
+                            targetElement.addClass('TFTarget-' + className);
+                        }
+
+                        item.target = className;
+                        target.push(targetElement);
+                    }
+
                     templateName.push(item.template);
                     targetName.push(item.target);
                 }
             }, this);
 
             mix(args, {
-                'errorFunc': bind(function(resultData){
+                'errorFunc': proxy(function(resultData){
                     if (args.loadingMsg !== false) {
                         this.sys.unsetLoadingMsg();
                     }
@@ -2060,50 +2289,36 @@
 
             var ajaxOptions = {
                 url: url,
-                method: 'get',
-                oncancel: function(){
+                type: 'GET',
+                complete: function(jqXHR, textStatus) {
                     if (args.loadingMsg !== false) {
                         me.unsetLoadingMsg();
                     }
                 },
-                onerror: function() {
-                    if (args.loadingMsg !== false) {
-                        me.unsetLoadingMsg();
-                    }
-                },
-                onsucceed: function(ajaxEvent) {
+                success: function(responseText, textStatus, jqXHR) {
                     // 输出调试信息
-                    if (TF.Core.Config.debug) {
-                        var param = Object.isString(ajaxEvent.target.data) ? ajaxEvent.target.data : Object.encodeURIJson(ajaxEvent.target.data);
-                        console.debug('url: ' + ajaxEvent.target.url + (param ? '?' + param : ''));
+                    if (TF.Config[me.appName].debug) {
+                        //var param = Object.isString(ajaxEvent.target.data) ? ajaxEvent.target.data : Object.encodeURIJson(ajaxEvent.target.data);
+                        //console.debug('url: ' + ajaxEvent.target.url + (param ? '?' + param : ''));
                     }
 
-                    var response = ajaxEvent.responseText;
+                    var response = responseText;
                     var result = null;
 
                     try {
-                        result = QW.JSON.parse(response);
+                        result = $.parseJSON(response);
                     } catch (e) {}
 
                     // 如果是空对象，则强制为 null
-                    if (result) {
-                        // 这里为了判断是否是空对象
-                        var j = false;
-                        for (var i in result) {
-                            j = true;
-                            break;
-                        }
-
-                        if (!j) {
-                            result = null;
-                        }
+                    if (result && $.isEmptyObject(result)) {
+                        result = null;
                     }
 
                     // 数据过滤器，在这里可以进行一些显示前的处理。
-                    if (result && typeof(args) != 'undefined' && Object.isFunction(args.filter)) {
+                    if (result && typeof(args) != 'undefined' && $.isFunction(args.filter)) {
                         var temp = args.filter(result);
 
-                        if (Object.isObject(temp)) {
+                        if ($.isPlainObject(temp)) {
                             mix(result, temp);
                         }
                     }
@@ -2125,39 +2340,39 @@
                         __TF: {}
                     }, true);
 
-                    if (mentor.Ajax.validation(result)) {
+                    if (mentor.Ajax.validation(me.appName, result)) {
                         // 执行成功
-                        template.forEach(function(t, i) {
+                        $.each(template, function(i, t) {
                             result.__TF.template = templateName[i];
                             result.__TF.target = targetName[i];
                             object = W(target[i]);
                             try {
-                                object.html(mentor.Template.render(t.html(), result));
+                                object.html(mentor.Template.render(me.appName, t.html(), result));
                             }
                             catch(e) {
                                 object.html(e);
                             }
                         });
 
-                        if (typeof(args) != 'undefined' && Object.isFunction(args.fn)) {
+                        if (typeof(args) != 'undefined' && $.isFunction(args.fn)) {
                             args.fn(result);
                         }
                     }
                     else {
                         // 执行失败
-                        if (typeof(args) != 'undefined' && Object.isFunction(args.errorFunc)) {
+                        if (typeof(args) != 'undefined' && $.isFunction(args.errorFunc)) {
                             args.errorFunc(result);
                         }
                         else {
-                            template.forEach(function(t, i){
+                            $.each(template, function(i, t){
                                 result.__TF.template = templateName[i];
                                 result.__TF.target = targetName[i];
-                                W(target[i]).html(result.toString() || '');
+                                $(target[i]).html(result.toString() || '');
                             });
                         }
                     }
 
-                    template.forEach(function(t, i){
+                    $.each(template, function(i, t){
                         me.templateData[templateName[i]] = result;
                         me.templateData[targetName[i]] = result;
                     });
@@ -2167,7 +2382,7 @@
             };
             mix(ajaxOptions, args, true);
 
-            if (!ajaxOptions.hasCache && ajaxOptions.method == 'get') {
+            if (!ajaxOptions.hasCache && ajaxOptions.type == 'GET') {
                 ajaxOptions.data = ajaxOptions.data || {};
                 ajaxOptions.data['_reqno'] = TF.Helper.Utility.random();
             }
@@ -2175,11 +2390,10 @@
             // 如果已经发送请求，则取消上一个请求
             var currentRequester = this.templateRequester.get(name.join());
             if (currentRequester) {
-                currentRequester.cancel();
+                currentRequester.abort();
             }
 
-            currentRequester = new QW.Ajax(ajaxOptions);
-            currentRequester.send();
+            currentRequester = $.ajax(ajaxOptions);
 
             this.templateRequester.set(name.join(), currentRequester);
         },
@@ -2188,16 +2402,19 @@
         _pageInitialize: function(name, args) {
             var target;
             var me = this;
-            name = toArray(name);
-            name.forEach(function(item, index){
+
+            name = $.makeArray(name);
+
+            $.each(name, function(index, item){
                 // 根据不同情况取 Target 名
-                if (Object.isString(item)) {
+                if ($.type(item) == 'string') {
                     target = item;
                 }
-                else if (Object.isPlainObject(item)) {
+                else if ($.isPlainObject(item)) {
                     target = item.target;
                 }
                 me.query('.TFTarget-' + target + ' .ComponentPager').delegate('a', 'click', function(e){
+                    e.stopPropagation();
                     e.preventDefault();
 
                     //me.setLoadingMsg();
@@ -2205,7 +2422,7 @@
                     args.fn = null;
                     args.fn = args.old_fn ? args.old_fn : null;
                     args.data = args.old_data ? args.old_data : null;
-                    page = W(this).attr('data-page');
+                    page = $(this).data('page');
 
                     me._pageHandler(name[index], page, args, index);
                 });
@@ -2215,10 +2432,10 @@
         // 默认的翻页处理器
         _pageHandler: function(name, page, args, index) {
             // 添加模板名、当前页等参数
-            if (Object.isString(name)) {
+            if ($.type(name) == 'string') {
                 args.pageData = 'component_template=' + name;
             }
-            else if (Object.isPlainObject(name)) {
+            else if ($.isPlainObject(name)) {
                 args.pageData = 'component_template=' + name.template + '&component_target=' + name.target;
             }
             args.pageData += '&component_page=' + page;
@@ -2272,10 +2489,10 @@
             if (el.length > 0) {
                 id = el.attr('id');
                 // 先隐藏除 name 所指定的组件外的其它组件
-                el.parentNode().query('.TFComponent').forEach(function(comEl){
-                    comEl = W(comEl);
+                el.parent().find('.TFComponent').each(function(index, comEl){
+                    comEl = $(comEl);
                     if (id != comEl.attr('id')) {
-                        comName = comEl.attr('data-tf-component');
+                        comName = comEl.data('tf-component');
 
                         if (comName) {
                             me.parentComponentMgr.post(comName, 'component-hide');
@@ -2305,19 +2522,19 @@
         },
 
         createComponentMgr: function(callback) {
-            return TF.Core.Application.createComponentMgrInstance(false, bind(callback, this.instance));
+            return TF.Core.Application.createComponentMgrInstance(false, proxy(callback, this.instance));
         },
 
         cancelRequest: function() {
             if (this.requester) {
-                this.requester.cancel();
+                this.requester.abort();
                 //mentor.Status.unsetLoadingMsg(this.instance);
             }
         },
 
         cancelRender: function() {
             if (this.loader) {
-                this.loader.cancel();
+                this.loader.abort();
             }
         },
 
@@ -2357,16 +2574,15 @@
 
         // 显示常规布局内容
         renderNormalLayout: function(isSetRouter, additional, notRefresh) {
-
             if (isSetRouter) {
-                var args = toArray(additional || []);
+                var args = $.makeArray(additional || []);
                 if (this.layoutData.page > 0) {
                     args.push('p' + this.layoutData.page);
                 }
                 this.setRouterArgs(args);
             }
 
-            if (!notRefresh || this.query('.TFTarget-' + this.layoutData.name).firstChild('*').length == 0) {
+            if (!notRefresh || this.query('.TFTarget-' + this.layoutData.name).children().length == 0) {
                 this.layoutData.fn.call(this.instance, this.layoutData.page);
             }
         },
@@ -2389,7 +2605,7 @@
                 items: data
             };
 
-            data.forEach(function(item, index){
+            $.each(data, function(index, item){
                 me.layoutData.tabs.set(item.name, index);
             });
 
@@ -2401,7 +2617,7 @@
             });
             // 重写 switchToItem 方法，以实现控制tab切换
             this.layoutData.tab.switchToItem = function(itemObj) {
-                var index = QW.ArrayH.indexOf(this.items, itemObj);
+                var index = $.inArray(itemObj, this.items);
                 var lastIndex = this.selectedIndex;
 
                 this.switchTo(index);
@@ -2423,7 +2639,7 @@
             if (isSetRouter) {
                 var values = ['tab-' + this.layoutData.items[index].name];
 
-                var args = toArray(additional || []);//TF.Core.Router.parseUri().params;
+                var args = $.makeArray(additional || []);//TF.Core.Router.parseUri().params;
                 if (/p\d+/.test(args[args.length - 1])) {
                     args = args.slice(0, -1);
                 }
@@ -2433,7 +2649,10 @@
 
                 values.push(args);
                 //values.push(additional || []);
-                values.push(this.layoutData.items[index].page > 0 ? 'p' + this.layoutData.items[index].page : '');
+
+                if (this.layoutData.items[index].page > 0) {
+                    values.push('p' + this.layoutData.items[index].page);
+                }
 
                 this.setRouterArgs(values.expand(true));
             }
@@ -2462,16 +2681,18 @@
         // name 是组件名，默认不写则是当前组件
         setRouterArgs: function(args, name) {
             var uri = [];
-            uri.push(TF.Helper.Utility.toComponentUriName(name || this.name));
-            args = toArray(args);
+            uri.push(TF.Helper.Utility.toComponentUriName(name || this.fullName));
+            args = $.makeArray(args);
             if (args.length > 0) {
                 uri.push(args.filter(function(item){
                     return item != '';
                 }).join('/'));
             }
 
+            this.lastArgs = args;
+
             // 组成一个可用的URI
-            //channelName/name/params
+            //appName:name/params
 
             //var old = this._getHistoryMgrValues();
             //if (old[0] == name[0] && old[1] == name[1]) return;
@@ -2488,7 +2709,7 @@
                 return 0;
             }
 
-            args = toArray(args);
+            args = $.makeArray(args);
             var pager = args[args.length - 1] || '';
             if ((/p\d+/).test(pager)) {
                 return pager.slice(1);
@@ -2506,7 +2727,7 @@
                 return defaultName;
             }
 
-            args = toArray(args);
+            args = $.makeArray(args);
             var tab = args[0] || '';
             if ((/tab-.+/).test(tab)) {
                 return tab.slice(4);
@@ -2546,7 +2767,9 @@
             templateRequester: new TF.Library.Hash(),
             templateData: {},
             // 组件索引值
-            index: 0
+            index: 0,
+            // 组件最后获取的 URI 参数
+            lastArgs: []
         };
         mix(this.sys, componentSys);
 
@@ -2561,26 +2784,31 @@
             //this._isLoadingMsg = false;
         },
 
-        InstanceReady: function(loader) {
+        InstanceReady: function() {
             // 实例准备就绪
         },
-        DomReady: function(loader) {
+
+        DomReady: function() {
             // 组件中的 DOM 已经准备就绪
         },
-        DomRefreshReady: function(loader) {
+
+        DomRefreshReady: function() {
             // 组件中的 DOM 已经刷新完毕并准备就绪
         },
-        DomDestroy: function(loader) {
+
+        DomDestroy: function() {
             // 组件即将销毁
         },
+
         ComponentsReady: function() {
             // 子组件准备就绪
         },
-        loadError: function(loader, msg) {
+
+        LoadError: function() {
             // 组件装载出错
-            //alert('Component Error: ' + msg);
-            //ComponentObject._loadContent();
+            mentor.Status.setFailMsg(this.sys.appName, 'Component [' + this.sys.getComponentName() + '] load error! Please refresh!');
         },
+
         // 默认渲染错误回调函数
         RenderError: function(result) {
             //window.location = '#';
@@ -2588,6 +2816,50 @@
             //mentor.Status.setFailMsg(result.error, false, this);
         }
     });
+
+
+    // 创建组件
+    var defineComponentClass = function(data) {
+        var superclass = TF.Component.Default
+
+        var component = function(){
+
+            // 执行父类构造函数
+            superclass.apply(this, arguments);
+
+            // 从原型中拷贝普通变量到实例中
+            for (var key in component.prototype) {
+                if (component.prototype.hasOwnProperty(key)) {
+                    if (Object.isPlainObject(component.prototype[key])) {
+                        this[key] = {};
+                        mix(this[key], component.prototype[key], true);
+                    }
+                }
+            }
+
+            if ('initialize' in this) {
+                this.initialize.apply(this, arguments);
+            }
+        };
+
+        mix(component.prototype, data);
+
+        var T = function(){};
+        T.prototype = superclass.prototype;
+
+        var cp = component.prototype;
+
+        component.prototype = new T();
+
+        //$super指向第一个父类，在构造器内可以通过arguments.callee.$super执行父类构造
+        //多继承时，instance和$super只对第一个父类有效
+        component.$super = superclass;
+
+        //如果原始类型的prototype上有方法，先copy
+        mix(component.prototype, cp, true);
+
+        return component;
+    };
 
 
     // 制作组件管理器类
@@ -2609,12 +2881,16 @@
             // 组件别名关联数组
             componentAlias = new TF.Library.Hash();
 
+        var getFullName = TF.Helper.Utility.getFullComponentName;
+
         var loadComplete = function(e) {
+            var fullName = getFullName(e.fullName);
+
             if (e.instance == null) {
-                throw 'Error: Component "' + e.fullName + '" load error! Please check Component Class Name!';
+                throw 'Error: Component "' + fullName + '" load error! Please check Component Class Name!';
             }
 
-            var currentObj = components.get(e.fullName)[e.instance.options.__index || 0];
+            var currentObj = components.get(fullName)[e.instance.options.__index || 0];
 
             currentObj.loaded = true;
             currentObj.instance = e.instance;
@@ -2652,7 +2928,9 @@
         var loadFirstComplete = function(e) {
             loadComplete(e);
 
-            components.get(e.fullName).slice(1).forEach(function(item, index) {
+            var fullName = getFullName(e.fullName);
+
+            components.get(fullName).slice(1).forEach(function(item, index) {
                 item.options.__index = index + 1;
                 var obj = new TF.Library.ComponentLoader(item.options, exports);
                 obj.on('complete', loadComplete);
@@ -2669,7 +2947,9 @@
                 loadComplete(e);
             }
 
-            components.get(e.fullName).slice(1).forEach(function(item, index) {
+            var fullName = getFullName(e.fullName);
+
+            components.get(fullName).slice(1).forEach(function(item, index) {
                 item.options.__index = index + 1;
                 var obj = new TF.Library.ComponentLoader(item.options, exports);
                 obj.on('complete', renderComplete);
@@ -2680,7 +2960,7 @@
 
         // 解析组件名
         var parseName = function(name) {
-            var match = /^([a-z0-9]+)(?:\[([a-z0-9-_]+)\])?$/i.exec(name);
+            var match = /^([a-z0-9:]+)(?:\[([a-z0-9-_]+)\])?$/i.exec(name);
             var index = 0;
 
             if (match) {
@@ -2708,35 +2988,10 @@
             };
         };
 
-
         var exports = {
             // 创建组件
             create: function(data) {
-                var superclass = TF.Component.Default
-
-                var component = function(){
-
-                    // 执行父类构造函数
-                    superclass.apply(this, arguments);
-
-                    // 从原型中拷贝普通变量到实例中
-                    for (var key in component.prototype) {
-                        if (component.prototype.hasOwnProperty(key)) {
-                            if (Object.isPlainObject(component.prototype[key])) {
-                                this[key] = {};
-                                mix(this[key], component.prototype[key], true);
-                            }
-                        }
-                    }
-
-                    if ('initialize' in this) {
-                        this.initialize.apply(this, arguments);
-                    }
-                };
-
-                mix(component.prototype, data);
-
-                return QW.FunctionH.extend(component, superclass);
+                return defineComponentClass(data);
             },
 
             // 注册组件
@@ -2752,7 +3007,7 @@
 
                 progressLength = 0;
 
-                components.forEach(function(item) {//console.log(item);
+                components.forEach(function(item) {
                     item[0].options.__index = 0;
                     var obj = new TF.Library.ComponentLoader(item[0].options, this);
                     if (item.length > 1) {
@@ -2776,7 +3031,9 @@
             add: function(options, defaultOptions) {
                 if (isLoading) return;
 
-                options = toArray(options);
+                options = $.makeArray(options);
+
+                defaultOptions = defaultOptions || {};
 
                 var op, name;
 
@@ -2790,7 +3047,7 @@
                     }
                     mix(op, defaultOptions);
 
-                    name = op.name;
+                    name = getFullName(op.name);
 
                     length++;
 
@@ -2827,7 +3084,7 @@
             // TODO
             // 添加组件到后台装载数组，等候随时装载
             addToBg: function(options) {
-                backgroundComponents.set(options.name, options);
+                backgroundComponents.set(getFullName(options.name), options);
 
                 return this;
             },
@@ -2835,12 +3092,16 @@
             // TODO
             // 装载某个后台组件
             loadBgComponent: function(name) {
-                var options = backgroundComponents.get(name),
-                    lastMessage;
+                name = getFullName(name);
 
-                if (components.has(name) || !options) return;
+                var options = backgroundComponents.get(name);
+                var lastMessage;
 
-                var fn = bind(function(e) {
+                if (components.has(name) || !options) {
+                    return;
+                }
+
+                var fn = proxy(function(e) {
                     //mentor.Status.unsetLoadingMsg();
                     lastMessage = backgroundLastMessage.get(name);
                     if (lastMessage) {
@@ -2857,6 +3118,8 @@
 
             // 删除组件
             remove: function(name) {
+                name = getFullName(name);
+
                 var obj = parseName(name);
 
                 if (obj.index === undefined) {
@@ -2875,9 +3138,11 @@
             post: function(name, msg, args) {
                 var nameObj;
 
-                name = toArray(name);
+                name = $.makeArray(name);
 
                 name.forEach(function(item) {
+                    item = getFullName(item);
+
                     // 处理事件订阅
                     this.publish(item, msg, args);
 
@@ -2920,16 +3185,19 @@
 
             // 显示当前容器中 name 所指定的组件，并且隐藏此容器中其它组件
             show: function(name) {
+                name = getFullName(name);
                 this.post(name, 'component-only-show');
             },
 
             has: function(name) {
+                name = getFullName(name);
                 var nameObj = parseName(name);
                 return components.has(nameObj.name) || backgroundComponents.has(nameObj.name);
             },
 
             // 取某个名字下的组件实例个数
             length: function(name) {
+                name = getFullName(name);
                 var nameObj = parseName(name);
                 if (components.has(nameObj.name)) {
                     return components.get(nameObj.name).length;
@@ -2941,11 +3209,12 @@
 
             // 以某个函数订阅某个组件的消息
             subscribe: function(name, msg, fn, scope) {
+                name = getFullName(name);
                 var nameObj = parseName(name);
 
                 name = nameObj.name + (nameObj.index === undefined ? '' : '[' + nameObj.index + ']');
 
-                var func = bind(fn, scope || fn);
+                var func = proxy(fn, scope || fn);
                 if (subscriptions.has(name + msg)) {
                     // 已存在的组件订阅
                     subscriptions.get(name + msg).push(func);
@@ -2967,6 +3236,7 @@
 
             // 发布消息
             publish: function(name, msg, args) {
+                name = getFullName(name);
                 var nameObj = parseName(name);
                 var loaded = false;
 
@@ -3014,6 +3284,7 @@
             // 获取一个组件实例的代理，只可以调用组件 Action 方法
             // TODO: 目前只支持每个组件名一个实例，未来需要考虑同一个组件加载多次的需求
             getAgent: function(name) {
+                name = getFullName(name);
                 var nameObj = parseName(name);
 
                 var agentObject;
@@ -3051,7 +3322,8 @@
                                     agentObject[funcName] = function(actionName) {
                                         return function() {
                                             //console.log(this.__instance);
-                                            return this.__instance[actionName + 'Action'].apply(this.__instance, arguments);
+                                            return this.__instance.sys.postMessage(actionName.decamelize(), arguments[0]);
+                                            //return this.__instance[actionName + 'Action'].apply(this.__instance, arguments);
                                         };
                                     }(funcName);
                                 }
@@ -3079,7 +3351,8 @@
                                     agentExportObject[funcName] = function(actionName) {
                                         return function() {
                                             //console.log(this.__instance);
-                                            return this.__instance[actionName + 'Action'].apply(this.__instance, arguments);
+                                            return this.__instance.sys.postMessage(actionName.decamelize(), arguments[0]);
+                                            //return this.__instance[actionName + 'Action'].apply(this.__instance, arguments);
                                         };
                                     }(funcName);
                                 }
@@ -3113,8 +3386,9 @@
         var parse = function(hash) {
             var bits = hash.match(/tf-([^\/]*)\/?(.*)/);
             var name, params;
+
             if (bits) {
-                name = bits[1] ? bits[1].camelize().capitalize() : defaultName;
+                name = bits[1] ? TF.Helper.Utility.toComponentName(bits[1]) : defaultName;
 
                 params = bits[2] ? bits[2].split('/') : [];
             }
@@ -3123,7 +3397,11 @@
                 params = [];
             }
 
-            return {name: name, params: params, uri: exports.makeUri(name, params)};
+            return {
+                name: name,
+                params: params,
+                uri: exports.makeUri(name, params)
+            };
         };
 
         var callback = function(hash){
@@ -3141,7 +3419,7 @@
             else {
                 // 非法参数
                 //window.location = '#tf-' + TF.Helper.Utility.toComponentUriName(defaultName);
-                mentor.Status.setFailMsg(TF.Helper.Utility.toComponentUriName(name) + ' uri error!');
+                mentor.Status.setFailMsg(TF.Helper.Utility.getApplicationName(fullName), TF.Helper.Utility.toComponentUriName(name) + ' uri error!');
             }
 
             // 额外路由
@@ -3227,19 +3505,35 @@
     }();
 
 
+    TF.define = function(name, options) {
+        var appName;
+
+        if (Object.isString(name)) {
+            appName = TF.Helper.Utility.getApplicationName(name);
+            name = TF.Helper.Utility.getComponentName(name);
+
+            TF.Component[appName] = TF.Component[appName] || {};
+
+            TF.Component[appName][name] = defineComponentClass(options);
+
+            return TF.Component[appName][name];
+        }
+        else {
+            return defineComponentClass(name);
+        }
+    };
+
+
     Dom.ready(function(){
         appReady = true;
         TF.Core.Application.publish('DomReady');
         // 执行页面默认的装载完成函数
-        if (TF.Ready != undefined) {
-            TF.Ready();
+        if (TF.ready != undefined) {
+            TF.ready();
         }
     });
 
 
-    // 挂载到 QWrap 上
-    QW.provide({
-        TF: TF
-    });
+    return TF;
 
-}());
+}));
