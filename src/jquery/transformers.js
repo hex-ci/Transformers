@@ -26,11 +26,13 @@
     var TF,
         Transformers = TF = Transformers || {
         'version': '1.2.0',
-        'build': '20140324'
+        'build': '20140402'
     };
 
     var proxy = $.proxy;
     var extend = $.extend;
+    var addEvent = $.event.add;
+    var triggerEvent = $.event.trigger;
 
     /**
      * 将源对象的属性并入到目标对象
@@ -93,6 +95,10 @@
         return new Function("opts", "return (" + s + ");")(opts);
     };
 
+
+
+
+    // 扩展 jQuery
     (function(){
         var rCRLF = /\r?\n/g,
             manipulation_rcheckableType = /^(?:checkbox|radio)$/i,
@@ -131,8 +137,39 @@
                 }).get();
             }
         });
+
+        $.extend({
+
+            /**
+             * 将字符串首字母大写
+             */
+            capitalize: function(s){
+                return s.slice(0,1).toUpperCase() + s.slice(1);
+            },
+
+            /**
+             * 反驼峰化字符串。将“abCd”转化为“ab-cd”。
+             * @method decamelize
+             * @static
+             * @param {String} s 字符串
+             * @return {String} 返回转化后的字符串
+             */
+            decamelize: function(s) {
+                return s.replace(/[A-Z]/g, function(a) {
+                    return "-" + a.toLowerCase();
+                });
+            }
+
+        });
+
     })();
 
+
+
+    // 判断是否是 IE
+    var userAgent = window.navigator.userAgent.toLowerCase();
+    var isIEBrowser = (/msie/ig).test(userAgent);
+    var isOperaBrowser = (/opera/ig).test(userAgent);
 
 
 
@@ -234,7 +271,7 @@
                     return mt.Template.render.apply(mt.Template, [].slice.call(arguments, 1));
                 }
                 else {
-                    return text.tmpl(text, opts);
+                    return TF.Helper.Utility.template(text, opts);
                 }
             }
         };
@@ -265,36 +302,6 @@
     }();
 
 
-
-    // mix 升级版，支持多级 mix
-    var merge = function(des, src, override) {
-        if (ObjectH.isArray(src)) {
-            for (var i = 0, len = src.length; i < len; i++) {
-                merge(des, src[i], override);
-            }
-            return des;
-        }
-        if (typeof override == 'function') {
-            for (i in src) {
-                des[i] = override(des[i], src[i], i);
-            }
-        }
-        else {
-            for (i in src) {
-                //这里要加一个des[i]，是因为要照顾一些不可枚举的属性
-                if (ObjectH.isPlainObject(des[i])) {
-                    des[i] = merge(des[i], src[i], override);
-                }
-                else if (override || !(des[i] || (i in des))) {
-                    des[i] = src[i];
-                }
-            }
-        }
-        return des;
-    };
-
-
-
     // 一些工具类
 
     // 实用工具静态类，包括一些常用例程
@@ -323,7 +330,7 @@
                 appName = defaultApplicationName;
             }
 
-            return appName.capitalize();
+            return $.capitalize(appName);
         },
 
         getComponentUrl: function(appName, uri, name) {
@@ -333,7 +340,7 @@
             var pattern = cfg.dataUriPattern;
             var names = TF.Helper.Utility.splitComponentName(name);
 
-            var str = pattern.tmpl({
+            var str = this.template(pattern, {
                 name: names,
                 uri: uri
             });
@@ -347,7 +354,7 @@
             // 通过 Application Name 得到相应的配置信息
             var pattern = cfg.templateUriPattern;
             var names = TF.Helper.Utility.splitComponentName(name);
-            var str = pattern.tmpl({
+            var str = this.template(pattern, {
                 name: names
             });
 
@@ -361,7 +368,7 @@
             var pattern = cfg.jsUriPattern;
             var names = TF.Helper.Utility.splitComponentName(name);
 
-            var str = pattern.tmpl({
+            var str = this.template(pattern, {
                 name: names,
                 ver: cfg.resourceVersion
             });
@@ -392,10 +399,10 @@
                 appName = tmp[0];
                 name = tmp[1];
 
-                return appName.capitalize() + ':' + name.camelize().capitalize();
+                return $.capitalize(appName) + ':' + $.capitalize($.camelCase(name));
             }
             else {
-                return uriName.camelize().capitalize();
+                return $.capitalize($.camelCase(uriName));
             }
         },
 
@@ -445,7 +452,185 @@
 
         getFullComponentName: function(name) {
             return TF.Helper.Utility.getApplicationName(name) + ':' + TF.Helper.Utility.getComponentName(name);
-        }
+        },
+
+        /**
+         * 字符串模板
+         * @method template
+         * @static
+         * @param {String} sTmpl 字符串模板，其中变量以{$aaa}表示。模板语法：
+         分隔符为{xxx}，"}"之前没有空格字符。
+         js表达式/js语句里的'}', 需使用' }'，即前面有空格字符
+         模板里的字符{用##7b表示
+         模板里的实体}用##7d表示
+         模板里的实体#可以用##23表示。例如（模板真的需要输出"##7d"，则需要这么写“##23#7d”）
+         {strip}...{/strip}里的所有\r\n打头的空白都会被清除掉
+         {}里只能使用表达式，不能使用语句，除非使用以下标签
+         {js ...}       －－任意js语句, 里面如果需要输出到模板，用print("aaa");
+         {if(...)}      －－if语句，写法为{if($a>1)},需要自带括号
+         {elseif(...)}  －－elseif语句，写法为{elseif($a>1)},需要自带括号
+         {else}         －－else语句，写法为{else}
+         {/if}          －－endif语句，写法为{/if}
+         {for(...)}     －－for语句，写法为{for(var i=0;i<1;i++)}，需要自带括号
+         {/for}         －－endfor语句，写法为{/for}
+         {while(...)}   －－while语句,写法为{while(i-->0)},需要自带括号
+         {/while}       －－endwhile语句, 写法为{/while}
+         * @param {Object} opts (Optional) 模板参数
+         * @return {String|Function}  如果调用时传了opts参数，则返回字符串；如果没传，则返回一个function（相当于把sTmpl转化成一个函数）
+
+         * @example alert(template("{$a} love {$b}.",{a:"I",b:"you"}));
+         * @example alert(template("{js print('I')} love {$b}.",{b:"you"}));
+         */
+        template: (function() {
+            /*
+            sArrName 拼接字符串的变量名。
+            */
+            var sArrName = "sArrCMX",
+                sLeft = sArrName + '.push("';
+            /*
+                tag:模板标签,各属性含义：
+                tagG: tag系列
+                isBgn: 是开始类型的标签
+                isEnd: 是结束类型的标签
+                cond: 标签条件
+                rlt: 标签结果
+                sBgn: 开始字符串
+                sEnd: 结束字符串
+            */
+            var tags = {
+                'js': {
+                    tagG: 'js',
+                    isBgn: 1,
+                    isEnd: 1,
+                    sBgn: '");',
+                    sEnd: ';' + sLeft
+                },
+                //任意js语句, 里面如果需要输出到模板，用print("aaa");
+                'if': {
+                    tagG: 'if',
+                    isBgn: 1,
+                    rlt: 1,
+                    sBgn: '");if',
+                    sEnd: '{' + sLeft
+                },
+                //if语句，写法为{if($a>1)},需要自带括号
+                'elseif': {
+                    tagG: 'if',
+                    cond: 1,
+                    rlt: 1,
+                    sBgn: '");} else if',
+                    sEnd: '{' + sLeft
+                },
+                //if语句，写法为{elseif($a>1)},需要自带括号
+                'else': {
+                    tagG: 'if',
+                    cond: 1,
+                    rlt: 2,
+                    sEnd: '");}else{' + sLeft
+                },
+                //else语句，写法为{else}
+                '/if': {
+                    tagG: 'if',
+                    isEnd: 1,
+                    sEnd: '");}' + sLeft
+                },
+                //endif语句，写法为{/if}
+                'for': {
+                    tagG: 'for',
+                    isBgn: 1,
+                    rlt: 1,
+                    sBgn: '");for',
+                    sEnd: '{' + sLeft
+                },
+                //for语句，写法为{for(var i=0;i<1;i++)},需要自带括号
+                '/for': {
+                    tagG: 'for',
+                    isEnd: 1,
+                    sEnd: '");}' + sLeft
+                },
+                //endfor语句，写法为{/for}
+                'while': {
+                    tagG: 'while',
+                    isBgn: 1,
+                    rlt: 1,
+                    sBgn: '");while',
+                    sEnd: '{' + sLeft
+                },
+                //while语句,写法为{while(i-->0)},需要自带括号
+                '/while': {
+                    tagG: 'while',
+                    isEnd: 1,
+                    sEnd: '");}' + sLeft
+                } //endwhile语句, 写法为{/while}
+            };
+
+            return function(sTmpl, opts) {
+                var N = -1,
+                    NStat = []; //语句堆栈;
+                var ss = [
+                    [/\{strip\}([\s\S]*?)\{\/strip\}/g, function(a, b) {
+                        return b.replace(/[\r\n]\s*\}/g, " }").replace(/[\r\n]\s*/g, "");
+                    }],
+                    [/\\/g, '\\\\'],
+                    [/"/g, '\\"'],
+                    [/\r/g, '\\r'],
+                    [/\n/g, '\\n'], //为js作转码.
+                    [
+                        /\{[\s\S]*?\S\}/g, //js里使用}时，前面要加空格。
+                        function(a) {
+                            a = a.substr(1, a.length - 2);
+                            for (var i = 0; i < ss2.length; i++) {a = a.replace(ss2[i][0], ss2[i][1]); }
+                            var tagName = a;
+                            if (/^(.\w+)\W/.test(tagName)) {tagName = RegExp.$1; }
+                            var tag = tags[tagName];
+                            if (tag) {
+                                if (tag.isBgn) {
+                                    var stat = NStat[++N] = {
+                                        tagG: tag.tagG,
+                                        rlt: tag.rlt
+                                    };
+                                }
+                                if (tag.isEnd) {
+                                    if (N < 0) {throw new Error("Unexpected Tag: " + a); }
+                                    stat = NStat[N--];
+                                    if (stat.tagG != tag.tagG) {throw new Error("Unmatch Tags: " + stat.tagG + "--" + tagName); }
+                                } else if (!tag.isBgn) {
+                                    if (N < 0) {throw new Error("Unexpected Tag:" + a); }
+                                    stat = NStat[N];
+                                    if (stat.tagG != tag.tagG) {throw new Error("Unmatch Tags: " + stat.tagG + "--" + tagName); }
+                                    if (tag.cond && !(tag.cond & stat.rlt)) {throw new Error("Unexpected Tag: " + tagName); }
+                                    stat.rlt = tag.rlt;
+                                }
+                                return (tag.sBgn || '') + a.substr(tagName.length) + (tag.sEnd || '');
+                            } else {
+                                return '",(' + a + '),"';
+                            }
+                        }
+                    ]
+                ];
+                var ss2 = [
+                    [/\\n/g, '\n'],
+                    [/\\r/g, '\r'],
+                    [/\\"/g, '"'],
+                    [/\\\\/g, '\\'],
+                    [/\$(\w+)/g, 'opts["$1"]'],
+                    [/print\(/g, sArrName + '.push(']
+                ];
+                for (var i = 0; i < ss.length; i++) {
+                    sTmpl = sTmpl.replace(ss[i][0], ss[i][1]);
+                }
+                if (N >= 0) {throw new Error("Lose end Tag: " + NStat[N].tagG); }
+
+                sTmpl = sTmpl.replace(/##7b/g,'{').replace(/##7d/g,'}').replace(/##23/g,'#'); //替换特殊符号{}#
+                sTmpl = 'var ' + sArrName + '=[];' + sLeft + sTmpl + '");return ' + sArrName + '.join("");';
+
+                //alert('转化结果\n'+sTmpl);
+                var fun = new Function('opts', sTmpl);
+                if (arguments.length > 1) {return fun(opts); }
+                return fun;
+            };
+        }())
+
     };
 
 
@@ -471,8 +656,8 @@
             return (this.keyOf(value) !== null);
         },
 
-        forEach: function(fn, scope){
-            Object.map(this.data, fn, scope);
+        each: function(fn){
+            $.each(this.data, fn);
 
             return this;
         },
@@ -504,9 +689,11 @@
         },
 
         empty: function(){
-            Object.map(this.data, function(key, value){
-                delete this.data[key];
-            }, this);
+            var me = this;
+
+            $.each(this.data, function(key, value){
+                delete me.data[key];
+            });
 
             return this;
         },
@@ -520,24 +707,42 @@
         },
 
         getKeys: function(){
-            return Object.keys(this.data);
+            var keys = [];
+
+            $.each(this.data, function(key){
+                keys.push(key);
+            });
+
+            return keys;
         },
 
         getValues: function(){
-            return Object.values(this.data);
+            var values = [];
+
+            $.each(this.data, function(key, value){
+                values.push(value);
+            });
+
+            return values;
         },
 
         toQueryString: function(){
             var s = [];
-            for( var p in this.data ){
-                if(this.data[p]==null) continue;
-                if(this.data[p] instanceof Array)
-                {
-                    for (var i=0;i<this.data[p].length;i++) s.push( encodeURIComponent(p) + '[]=' + encodeURIComponent(this.data[p][i]));
+
+            for ( var p in this.data ) {
+                if (this.data[p]==null) {
+                    continue;
                 }
-                else
+                if (this.data[p] instanceof Array) {
+                    for (var i=0; i<this.data[p].length; i++) {
+                        s.push( encodeURIComponent(p) + '[]=' + encodeURIComponent(this.data[p][i]));
+                    }
+                }
+                else {
                     s.push( encodeURIComponent(p) + '=' + encodeURIComponent(this.data[p]));
+                }
             }
+
             return s.join('&');
         }
     });
@@ -552,14 +757,14 @@
         this.prefix = '#';
         this.iframe = null;
         this.handle = false;
-        this.useIframe = (Browser.ie && (typeof(document.documentMode)=='undefined' || document.documentMode < 8));
+        this.useIframe = (isIEBrowser && (typeof(document.documentMode)=='undefined' || document.documentMode < 8));
         this.state = null;
         this.supports = (('onhashchange' in window) && (typeof(document.documentMode) == 'undefined' || document.documentMode > 7));
         this.noFireOnce = false;
 
         mix(this.options, options, true);
 
-        CustEvent.createEvents(this, ['hashChanged']);
+        //CustEvent.createEvents(this, ['hashChanged']);
 
         this.initialize();
 
@@ -570,7 +775,7 @@
             var self = this;
 
             // Disable Opera's fast back/forward navigation mode
-            if (Browser.opera && window.history.navigationMode) {
+            if (isOperaBrowser && window.history.navigationMode) {
                 window.history.navigationMode = 'compatible';
             }
 
@@ -582,7 +787,7 @@
                         self.noFireOnce = false;
                         return;
                     }
-                    self.fire('hashChanged', {hash: self.getHash()});
+                    triggerEvent('hashChanged', {hash: self.getHash()}, self);
                 });
             }
             else {
@@ -598,16 +803,7 @@
 
         initializeHistoryIframe: function() {
             var hash = this.getHash(), doc;
-            this.iframe = W(Dom.createElement('iframe', {
-                src: this.options.blank_page
-            })).css({
-                'position'  : 'absolute',
-                'top'       : 0,
-                'left'      : 0,
-                'width'     : '1px',
-                'height'    : '1px',
-                'visibility': 'hidden'
-            }).appendTo(W('body')[0])[0];
+            this.iframe = this.getIframe();
 
             this.istate = null;
 
@@ -621,14 +817,14 @@
         checkHash: function(){
             var state = this.getState();
             if (this.state == state) return;
-            if (Browser.ie && (this.state !== null)) {
+            if (isIEBrowser && (this.state !== null)) {
                 this.setState(state, true);
             }
             else {
                 this.state = state;
             }
 
-            this.fire('hashChanged', {hash: state});
+            triggerEvent('hashChanged', {hash: state}, this);;
         },
 
         getHash: function() {
@@ -660,7 +856,7 @@
                 return;
             }
 
-            this.fire('hashChanged', {hash: hash});
+            triggerEvent('hashChanged', {hash: hash}, this);
         },
 
         pick: function() {
@@ -693,18 +889,9 @@
             state = this.pick(state, '');
             top.location.hash = this.prefix + state || this.prefix;
 
-            if (Browser.ie && (!fix || this.istateOld)) {
+            if (isIEBrowser && (!fix || this.istateOld)) {
                 if (!this.iframe) {
-                    this.iframe = W(Dom.createElement('iframe', {
-                        src: this.options.blank_page
-                    })).css({
-                        'position'  : 'absolute',
-                        'top'       : 0,
-                        'left'      : 0,
-                        'width'     : '1px',
-                        'height'    : '1px',
-                        'visibility': 'hidden'
-                    }).appendTo(document.body)[0];
+                    this.iframe = this.getIframe();
 
                     this.istate = this.state;
                 }
@@ -727,7 +914,7 @@
 
         start: function() {
             if (this.supports) {
-                this.fire('hashChanged', {hash: this.getHash()});
+                triggerEvent('hashChanged', {hash: this.getHash()}, this);
                 return;
             }
 
@@ -739,6 +926,17 @@
 
         stop: function() {
             this.clear(this.handle);
+        },
+
+        getIframe: function() {
+            return $('<iframe src="' + this.options.blank_page + '"></iframe>').css({
+                'position'  : 'absolute',
+                'top'       : 0,
+                'left'      : 0,
+                'width'     : '1px',
+                'height'    : '1px',
+                'visibility': 'hidden'
+            }).appendTo(document.body)[0];
         }
     });
 
@@ -753,7 +951,7 @@
             var appName = 'Transformers';
             var appConfig;
 
-            if (Object.isString(name)) {
+            if ($.type(name) == 'string') {
                 appName = name;
                 appConfig = config;
             }
@@ -798,20 +996,20 @@
         // 发布主题
         publish: function(name, args) {
             if (appSubscriptions.has(name)) {
-                appSubscriptions.get(name).forEach(function(item, i) {
+                appSubscriptions.get(name).each(function(i, item) {
                     if (item.fn) {
                         item.fn.apply(item.scope, args || []);
                     }
-                }, this);
+                });
             }
         },
 
         // 自动加载页面中的组件
         bootstrap: function(element, componentMgr) {
-            element = W(element) || W('body');
+            element = $(element) || $('body');
             componentMgr = componentMgr || TF.Core.ComponentMgr
 
-            var components = element.query('*').filter(function(el){
+            var components = element.query('*').filter(function(index, el){
                 return el.tagName.toLowerCase().indexOf('tf:') === 0;
             });
 
@@ -822,20 +1020,20 @@
                 var attributes;
                 var exclude = ['id', 'class', 'style'];
 
-                components.forEach(function(el){
-                    el = W(el);
+                components.each(function(index, el){
+                    el = $(el);
 
                     args = {};
 
-                    name = TF.Helper.Utility.toComponentName(el.attr('tagName').toLowerCase().slice(3));
+                    name = TF.Helper.Utility.toComponentName(el.prop('tagName').toLowerCase().slice(3));
 
                     //console.log(el[0].attributes);
                     attributes = $.makeArray(el[0].attributes);
                     //console.log(attributes);
 
-                    attributes.forEach(function(item){
-                        if (!exclude.contains(item.name)) {
-                            args[item.name.camelize()] = ((item.name == item.value || item.value === '') ? true : item.value);
+                    $.each(attributes, function(i, item){
+                        if (!$.inArray(item.name, exclude)) {
+                            args[$.camelCase(item.name)] = ((item.name == item.value || item.value === '') ? true : item.value);
                         }
                     });
 
@@ -870,7 +1068,7 @@
         };
         mix(this.options, options, true);
 
-        CustEvent.createEvents(this, ['instanced', 'complete', 'failure']);
+        //CustEvent.createEvents(this, ['instanced', 'complete', 'failure']);
 
         // 判断是加载到全局组件管理器，还是私有组件管理器中
         this.componentMgrInstance = componentMgrInstance ? componentMgrInstance : TF.Core.ComponentMgr;
@@ -891,6 +1089,10 @@
 
             // 注册到组件管理器
             //this.componentMgrInstance.register(this.fullName);
+        },
+
+        on: function(eventName, callback) {
+            return $.event.add(this, eventName, callback);
         },
 
         load: function() {
@@ -1001,7 +1203,7 @@
 
             componentClass = componentClass || this._instance;
 
-            if (Object.isFunction(componentClass)) {
+            if ($.isFunction(componentClass)) {
                 mix(componentClass.prototype, mentorClass.prototype, function(des, src, key){
                     if (key == 'Mentor' || componentClass.prototype.hasOwnProperty(key)) {
                         return des;
@@ -1040,7 +1242,7 @@
                 // 把最后一级的父类方法转换一下放入当前实例
                 // 前提是子类重载了父类的方法
                 for (var i in mentorClass.prototype) {
-                    if (mentorClass.prototype.hasOwnProperty(i) && Object.isFunction(mentorClass.prototype[i]) && Object.isFunction(this._instance[i])) {
+                    if (mentorClass.prototype.hasOwnProperty(i) && $.isFunction(mentorClass.prototype[i]) && $.isFunction(this._instance[i])) {
                         this._instance['__parent__' + i] = mentorClass.prototype[i];
                     }
                 }
@@ -1088,13 +1290,13 @@
             // 把加载器的配置传递到组件实例的sys空间里
             mix(this._instance.sys.options, this.options, function(des, src, key){
                 if (key == 'data') {
-                    if (Object.isPlainObject(src)) {
+                    if ($.isPlainObject(src)) {
                         if (!des) {
                             des = {};
                         }
                         return mix(des, src, true);
                     }
-                    else if (Object.isString(src)) {
+                    else if ($.type(src) == 'string') {
                         if (!des) {
                             des = {};
                         }
@@ -1122,18 +1324,20 @@
 
             //this.componentMgrInstance.loaded(this.fullName, this._instance);
 
-            this.fire('instanced', {instance: this._instance, fullName: this.fullName, name: this.name, appName: this.appName});
+            var obj = {instance: this._instance, fullName: this.fullName, name: this.name, appName: this.appName};
+
+            triggerEvent('instanced', obj, this);
 
             // 看是否是延迟渲染
             if (!this.options.lazyRender) {
                 this._instance.sys.render();
             }
 
-            this.fire('complete', {instance: this._instance, fullName: this.fullName, name: this.name, appName: this.appName});
+            triggerEvent('complete', obj, this);
         },
 
         _failure: function() {
-            this.fire('failure', {instance: null, fullName: this.fullName, name: this.name, appName: this.appName});
+            triggerEvent('failure', {instance: null, fullName: this.fullName, name: this.name, appName: this.appName}, this);
         },
 
         getInstance: function() {
@@ -1198,7 +1402,7 @@
                     break;
             }
 
-            if (this.instance && Object.isFunction(this.instance[funcName + 'ActionBefore'])) {
+            if (this.instance && $.isFunction(this.instance[funcName + 'ActionBefore'])) {
                 is_continue = this.instance[funcName + 'ActionBefore'].call(this.instance, filteredArgs, args);
             }
 
@@ -1238,7 +1442,7 @@
             }
 
             // 把消息派发到组件实例中
-            if (this.instance && Object.isFunction(this.instance[funcName + 'Action'])) {
+            if (this.instance && $.isFunction(this.instance[funcName + 'Action'])) {
                 returnValue = this.instance[funcName + 'Action'].call(this.instance, filteredArgs, args);
             }
 
@@ -1357,7 +1561,7 @@
         refresh: function(data) {
             if (!this.rendered) return;
 
-            if (Object.isObject(data)) {
+            if ($.isPlainObject(data)) {
                 this.options.data = data;
                 this.loader.data = data;
             }
@@ -1400,6 +1604,8 @@
         },
 
         _loadComplete: function(responseText, textStatus, jqXHR) {
+            var me = this;
+
             // 如果是取消的请求，则什么也不做，我们只关心真正请求回来的数据，而不关心请求的状态
             if (jqXHR && jqXHR.statusText == 'canceled') {
                 return;
@@ -1413,15 +1619,15 @@
 
             response = responseText;
 
-            if (Object.isString(response)) {
+            if ($.type(response) == 'string') {
                 // 解决 IE 下 innerHTML 不能直接设置 script 的问题
-                if ((/msie/ig).test(window.navigator.userAgent.toLowerCase())) {
+                if (isIEBrowser) {
                     response = response.replace(/(<div\s+class="TFComponent"\s*>)/ig, '$1<div style="display:none">tf</div>');
                 }
 
                 responseTree = $('<div></div>').html(response).find('.TFComponent');
             }
-            else if (Object.isWrap(response)) {
+            else if (response && response.length > 0) {
                 responseTree = response.first();
             }
             else {
@@ -1467,7 +1673,7 @@
                         var cls = renderTo[0].attributes.getNamedItem('class');
                         if (cls) {
                             $.each(cls.value.split(' '), function(i, v){
-                                W(element).addClass(v);
+                                element.addClass(v);
                             });
                         }
 
@@ -1476,7 +1682,7 @@
                         if (style) {
                             var namedItem = document.createAttribute("style");
                             namedItem.value = style.value;
-                            $(element)[0].attributes.setNamedItem(namedItem);
+                            element[0].attributes.setNamedItem(namedItem);
                         }
 
                         renderTo.replaceWith(element);
@@ -1513,7 +1719,7 @@
                 var options = this.query('.tf-options');
                 var name, tag;
                 $.each(options, function(i, e){
-                    e = W(e);
+                    e = $(e);
                     name = e.attr('name');
 
                     if (!name) {
@@ -1522,14 +1728,14 @@
 
                     tag = e.prop('tagName').toLowerCase();
                     if (tag == 'input' || tag == 'textarea') {
-                        this.instance.options[name] = e.val();
+                        me.instance.options[name] = e.val();
                     }
                     else {
-                        this.instance.options[name] = e.html();
+                        me.instance.options[name] = e.html();
                     }
-                }, this);
+                });
 
-                $.event.trigger('complete', this._getEventObject(), this.instance);
+                triggerEvent('complete', this._getEventObject(), this.instance);
 
                 // 页面全部装载完成！
                 if (this.refreshing) {
@@ -1552,7 +1758,7 @@
                         // 刷新完毕
                         this.refreshing = false;
 
-                        $.event.trigger('refreshReady', this._getEventObject(), this.instance);
+                        triggerEvent('refreshReady', this._getEventObject(), this.instance);
 
                     }, this));
 
@@ -1591,7 +1797,7 @@
                             this.lastMessage = null;
                         }
 
-                        $.event.trigger('ready', this._getEventObject(), this.instance);
+                        triggerEvent('ready', this._getEventObject(), this.instance);
 
                     }, this));
 
@@ -1603,7 +1809,7 @@
                 // 刷新完毕
                 this.refreshing = false;
 
-                $.event.trigger('failure', this._getEventObject(), this.instance);
+                triggerEvent('failure', this._getEventObject(), this.instance);
 
                 if (TF.Config[this.appName].debug) {
                     console.error && console.error('Component [' + this.getComponentName() + '] load error!');
@@ -1664,7 +1870,7 @@
             var targetName = '';
 
             //console.log(me.templateData);
-            //console.log(W(this).parentNode('.tf-bind'));
+            //console.log($(this).parents('.tf-bind'));
 
             if (bindingElement.length > 0) {
                 // 这里可以通过自动查找 target name 实现无需在 data-bind 里填写模版名
@@ -1705,7 +1911,7 @@
                     e.preventDefault();
                 }
                 var args = {};
-                var action = W(this).attr('tf-action-click') || '';
+                var action = $(this).attr('tf-action-click') || '';
 
                 // 解析参数
                 var match = /(.*?)\((.*)\)/.exec(action);
@@ -1780,7 +1986,7 @@
                     }
                 });
                 // 如果没有 type=submit 的按钮则添加一个
-                if (form.query('button[type=submit]').length == 0) {
+                if (form.find('button[type=submit]').length == 0) {
                     form.append($('<div style="position:absolute;left:-9999px;top:-9999px;"><button type="submit"></button></div>'));
                 }
             }
@@ -1864,7 +2070,7 @@
                 me.componentMgr.add(args);
             });
 
-            $.each(components2, function(i, el){
+            $.each(components2, function(index, el){
                 el = $(el);
 
                 args = {};
@@ -1957,7 +2163,7 @@
 
         query: function(selector) {
             if (this.topElement) {
-                return this.topElement.find(selector);
+                return selector ? this.topElement.find(selector) : this.topElement;
             }
             else {
                 return $();
@@ -2022,12 +2228,12 @@
                 url: url,
                 type: 'GET',
                 timeout: 10000,
+                dataType: 'text',
                 xhrFields: {
                     'withCredentials': true
                 },
                 context: {
-                    instance: this.instance,
-                    options: mix({}, $.ajaxSettings)
+                    instance: this.instance
                 },
                 complete: this._sendComplete
             };
@@ -2038,8 +2244,10 @@
             }
             mix(ajaxOptions, options, true);
 
-            if ($(ajaxOptions.data).prop('tagName').toLowerCase() == 'form') {
-                ajaxOptions.data = $(ajaxOptions.data).serialize({
+            var tagName = $(ajaxOptions.data).prop('tagName');
+
+            if (tagName && tagName.toLowerCase() == 'form') {
+                ajaxOptions.data = el.serialize({
                     withDisabledSelect: ajaxOptions.withDisabledSelect
                 });
             }
@@ -2053,6 +2261,8 @@
             if (this.requester) {
                 this.requester.abort();
             }
+
+            ajaxOptions.context.options = mix(options, $.ajaxSettings, true);
 
             this.requester = $.ajax(ajaxOptions);
 
@@ -2093,7 +2303,7 @@
 
             // 输出调试信息
             if (TF.Config[me.sys.appName].debug) {
-                //var param = Object.isString(jqXHR.target.data) ? jqXHR.target.data : Object.encodeURIJson(jqXHR.target.data);
+                //var param = $.type(jqXHR.target.data) == 'string' ? jqXHR.target.data : $.param(jqXHR.target.data);
                 //console.debug && console.debug('url: ' + jqXHR.target.url + (param ? '?' + param : ''));
             }
 
@@ -2122,7 +2332,7 @@
                 mentor.Status.setFailMsg(me.sys.appName, args.message, me, args);
             }
             else {
-                if (Object.isString(args.message)) {
+                if ($.type(args.message) == 'string') {
                     // 显示成功消息
                     mentor.Status.setSuccMsg(me.sys.appName, args.message, me, args);
                 }
@@ -2132,6 +2342,7 @@
         // 静态渲染模板
         renderStaticTemplate: function(name, args) {
             var html;
+            var me = this;
 
             args = args || {};
 
@@ -2141,16 +2352,16 @@
             $.each(name, function(index, item){
                 // 根据不同情况取 Target 名
                 if ($.type(item) == 'string') {
-                    html = this.query('.TFTemplate-' + item).html();
-                    this.query('.TFTarget-' + item).html(mentor.Template.render(this.appName, html, args));
-                    this.templateData[item] = args;
+                    html = me.query('.TFTemplate-' + item).html();
+                    me.query('.TFTarget-' + item).html(mentor.Template.render(me.appName, html, args));
+                    me.templateData[item] = args;
                 }
                 else if ($.isPlainObject(item)) {
                     templateName = item.template;
-                    html = this.query('.TFTemplate-' + item.template).html();
+                    html = me.query('.TFTemplate-' + item.template).html();
 
                     if ($.type(item.target) == 'string') {
-                        this.query('.TFTarget-' + item.target).html(mentor.Template.render(this.appName, html, args));
+                        me.query('.TFTarget-' + item.target).html(mentor.Template.render(me.appName, html, args));
                     }
                     else {
                         var targetElement = $(item.target);
@@ -2158,20 +2369,20 @@
                         var className;
                         if (match) {
                             className = match[1];
-                            $(item.target).html(mentor.Template.render(this.appName, html, args));
+                            $(item.target).html(mentor.Template.render(me.appName, html, args));
                         }
                         else {
                             className = 'gen-' + TF.Helper.Utility.random();
-                            $(item.target).addClass('TFTarget-' + className).html(mentor.Template.render(this.appName, html, args));
+                            $(item.target).addClass('TFTarget-' + className).html(mentor.Template.render(me.appName, html, args));
                         }
 
                         item.target = className;
                     }
 
-                    this.templateData[item.template] = args;
-                    this.templateData[item.target] = args;
+                    me.templateData[item.template] = args;
+                    me.templateData[item.target] = args;
                 }
-            }, this);
+            });
         },
 
         // 取得渲染后的模板内容
@@ -2181,6 +2392,8 @@
 
         // 动态渲染模板，支持自动分页
         renderTemplate: function(name, args, actionName) {
+            var me = this;
+
             if (!name) return;
             //{'template':'xxx', 'target':'xxxx'}
             if (!args) args = {};
@@ -2237,16 +2450,16 @@
             // 支持渲染一批模板
             $.each(name, function(index, item){
                 if ($.type(item) == 'string') {
-                    template.push(this.query('.TFTemplate-' + item));
-                    target.push(this.query('.TFTarget-' + item));
+                    template.push(me.query('.TFTemplate-' + item));
+                    target.push(me.query('.TFTarget-' + item));
                     templateName.push(item);
                     targetName.push(item);
                 }
                 else if ($.isPlainObject(item)) {
-                    template.push(this.query('.TFTemplate-' + item.template));
+                    template.push(me.query('.TFTemplate-' + item.template));
 
                     if ($.type(item.target) == 'string') {
-                        target.push(this.query('.TFTarget-' + item.target));
+                        target.push(me.query('.TFTarget-' + item.target));
                     }
                     else {
                         var targetElement = $(item.target);
@@ -2267,7 +2480,7 @@
                     templateName.push(item.template);
                     targetName.push(item.target);
                 }
-            }, this);
+            });
 
             mix(args, {
                 'errorFunc': proxy(function(resultData){
@@ -2290,6 +2503,7 @@
             var ajaxOptions = {
                 url: url,
                 type: 'GET',
+                dataType: 'text',
                 complete: function(jqXHR, textStatus) {
                     if (args.loadingMsg !== false) {
                         me.unsetLoadingMsg();
@@ -2298,8 +2512,8 @@
                 success: function(responseText, textStatus, jqXHR) {
                     // 输出调试信息
                     if (TF.Config[me.appName].debug) {
-                        //var param = Object.isString(ajaxEvent.target.data) ? ajaxEvent.target.data : Object.encodeURIJson(ajaxEvent.target.data);
-                        //console.debug('url: ' + ajaxEvent.target.url + (param ? '?' + param : ''));
+                        //var param = $.type(jqXHR.target.data) == 'string' ? ajaxEvent.target.data : $.param(jqXHR.target.data);
+                        //console.debug('url: ' + jqXHR.target.url + (param ? '?' + param : ''));
                     }
 
                     var response = responseText;
@@ -2345,7 +2559,7 @@
                         $.each(template, function(i, t) {
                             result.__TF.template = templateName[i];
                             result.__TF.target = targetName[i];
-                            object = W(target[i]);
+                            object = $(target[i]);
                             try {
                                 object.html(mentor.Template.render(me.appName, t.html(), result));
                             }
@@ -2657,7 +2871,7 @@
                 this.setRouterArgs(values.expand(true));
             }
 
-            if (!notRefresh || W(this.layoutData.tab.views[index]).query('.TFTarget-' + this.layoutData.items[index].name).firstChild('*').length == 0) {
+            if (!notRefresh || $(this.layoutData.tab.views[index]).find('.TFTarget-' + this.layoutData.items[index].name).children().length == 0) {
                 this.layoutData.items[index].fn && this.layoutData.items[index].fn.call(this.instance, this.layoutData.items[index].page);
             }
         },
@@ -2671,9 +2885,9 @@
             var index = this.layoutData.tab.selectedIndex;
 
             if (index < 0) {
-                return W([]);
+                return $();
             }
-            return W(this.layoutData.tab.views[index]);
+            return $(this.layoutData.tab.views[index]);
         },
 
         // 用于设置前进后退的 URI
@@ -2773,7 +2987,7 @@
         };
         mix(this.sys, componentSys);
 
-        CustEvent.createEvents(this, ['complete', 'failure', 'refreshReady', 'ready']);
+        //CustEvent.createEvents(this, ['complete', 'failure', 'refreshReady', 'ready']);
 
         this.initialize(options);
 
@@ -2814,6 +3028,10 @@
             //window.location = '#';
             //mentor.Status.unsetLoadingMsg(this);
             //mentor.Status.setFailMsg(result.error, false, this);
+        },
+
+        on: function(eventName, callback) {
+            return $.event.add(this, eventName, callback);
         }
     });
 
@@ -2830,7 +3048,7 @@
             // 从原型中拷贝普通变量到实例中
             for (var key in component.prototype) {
                 if (component.prototype.hasOwnProperty(key)) {
-                    if (Object.isPlainObject(component.prototype[key])) {
+                    if ($.isPlainObject(component.prototype[key])) {
                         this[key] = {};
                         mix(this[key], component.prototype[key], true);
                     }
@@ -2883,17 +3101,17 @@
 
         var getFullName = TF.Helper.Utility.getFullComponentName;
 
-        var loadComplete = function(e) {
-            var fullName = getFullName(e.fullName);
+        var loadComplete = function(e, param) {
+            var fullName = getFullName(param.fullName);
 
-            if (e.instance == null) {
-                throw 'Error: Component "' + fullName + '" load error! Please check Component Class Name!';
+            if (param.instance == null) {
+                $.error('Error: Component "' + fullName + '" load error! Please check Component Class Name!');
             }
 
-            var currentObj = components.get(fullName)[e.instance.options.__index || 0];
+            var currentObj = components.get(fullName)[param.instance.options.__index || 0];
 
             currentObj.loaded = true;
-            currentObj.instance = e.instance;
+            currentObj.instance = param.instance;
 
             progressLength++;
 
@@ -2910,50 +3128,50 @@
                 TF.Core.Application.publish('GlobalComponentLoaded');
             }
             else {
-                if (Object.isFunction(loadedCallback)) {
+                if ($.isFunction(loadedCallback)) {
                     loadedCallback();
                 }
             }
         };
 
-        var renderComplete = function(e) {
+        var renderComplete = function(e, param) {
             if (e.instance && !e.instance.options.lazyRender) {
-                e.instance.on('ready', loadComplete);
+                addEvent(e.instance, 'ready', loadComplete);
             }
             else {
-                loadComplete(e);
+                loadComplete(e, param);
             }
         };
 
-        var loadFirstComplete = function(e) {
-            loadComplete(e);
+        var loadFirstComplete = function(e, param) {
+            loadComplete(e, param);
 
-            var fullName = getFullName(e.fullName);
+            var fullName = getFullName(param.fullName);
 
-            components.get(fullName).slice(1).forEach(function(item, index) {
+            $.each(components.get(fullName).slice(1), function(index, item) {
                 item.options.__index = index + 1;
                 var obj = new TF.Library.ComponentLoader(item.options, exports);
-                obj.on('complete', loadComplete);
-                obj.on('failure', loadComplete);
+                addEvent(obj, 'complete', loadComplete);
+                addEvent(obj, 'failure', loadComplete);
                 obj.load();
             });
         };
 
-        var renderFirstComplete = function(e) {
-            if (e.instance && !e.instance.options.lazyRender) {
-                e.instance.on('ready', loadComplete);
+        var renderFirstComplete = function(e, param) {
+            if (param.instance && !param.instance.options.lazyRender) {
+                addEvent(param.instance, 'ready', loadComplete);
             }
             else {
-                loadComplete(e);
+                loadComplete(e, param);
             }
 
-            var fullName = getFullName(e.fullName);
+            var fullName = getFullName(param.fullName);
 
-            components.get(fullName).slice(1).forEach(function(item, index) {
+            $.each(components.get(fullName).slice(1), function(index, item) {
                 item.options.__index = index + 1;
                 var obj = new TF.Library.ComponentLoader(item.options, exports);
-                obj.on('complete', renderComplete);
-                obj.on('failure', renderComplete);
+                addEvent(obj, 'complete', renderComplete);
+                addEvent(obj, 'failure', renderComplete);
                 obj.load();
             });
         };
@@ -3003,23 +3221,25 @@
 
             // 启动组件装载进程，并行装载
             startLoad: function(withRender) {
+                var me = this;
+
                 if (isLoading) return;
 
                 progressLength = 0;
 
-                components.forEach(function(item) {
+                components.each(function(index,item) {
                     item[0].options.__index = 0;
-                    var obj = new TF.Library.ComponentLoader(item[0].options, this);
+                    var obj = new TF.Library.ComponentLoader(item[0].options, me);
                     if (item.length > 1) {
-                        obj.on('complete', (withRender ? renderFirstComplete : loadFirstComplete));
-                        obj.on('failure', (withRender ? renderFirstComplete : loadFirstComplete));
+                        addEvent(obj, 'complete', (withRender ? renderFirstComplete : loadFirstComplete));
+                        addEvent(obj, 'failure', (withRender ? renderFirstComplete : loadFirstComplete));
                     }
                     else {
-                        obj.on('complete', (withRender ? renderComplete : loadComplete));
-                        obj.on('failure', (withRender ? renderComplete : loadComplete));
+                        addEvent(obj, 'complete', (withRender ? renderComplete : loadComplete));
+                        addEvent(obj, 'failure', (withRender ? renderComplete : loadComplete));
                     }
                     obj.load();
-                }, this);
+                });
             },
 
             // 是否还在装载中
@@ -3029,6 +3249,8 @@
 
             // 添加组件到预装载队列，等候装载
             add: function(options, defaultOptions) {
+                var me = this;
+
                 if (isLoading) return;
 
                 options = $.makeArray(options);
@@ -3037,9 +3259,9 @@
 
                 var op, name;
 
-                options.forEach(function(item){
+                $.each(options, function(index, item){
                     // 合并默认选项
-                    if (Object.isString(item)) {
+                    if ($.type(item) == 'string') {
                         op = {name: item};
                     }
                     else {
@@ -3071,12 +3293,12 @@
                     // 保存别名
                     if (op.alias) {
                         if (componentAlias.has(name + op.alias)) {
-                            throw 'Error: Component alias "' + name + '[' + op.alias + ']" duplicate definition!';
+                            $.error('Error: Component alias "' + name + '[' + op.alias + ']" duplicate definition!');
                         }
                         componentAlias.set(name + op.alias, components.get(name).length - 1);
                     }
 
-                }, this);
+                });
 
                 return this;
             },
@@ -3112,7 +3334,7 @@
                 //mentor.Status.unsetLoadingMsg();
                 // 加载组件
                 var obj = new TF.Library.ComponentLoader(options, this);
-                obj.on('complete', fn);
+                addEvent(obj, 'complete', fn);
                 obj.load();
             },
 
@@ -3137,14 +3359,15 @@
             // 投递事件给具体的实例
             post: function(name, msg, args) {
                 var nameObj;
+                var me = this;
 
                 name = $.makeArray(name);
 
-                name.forEach(function(item) {
+                $.each(name, function(index, item) {
                     item = getFullName(item);
 
                     // 处理事件订阅
-                    this.publish(item, msg, args);
+                    me.publish(item, msg, args);
 
                     nameObj = parseName(item);
 
@@ -3154,7 +3377,7 @@
 
                         if (com) {
                             // 传递给组件
-                            com.forEach(function(value) {
+                            $.each(com, function(i, value) {
                                 if (value.loaded) {
                                     value.instance.sys.postMessage(msg, args);
                                 }
@@ -3163,7 +3386,7 @@
                         else {
                             // 发送给后台组件
 //                            backgroundLastMessage.set(item, [msg, args]);
-//                            this.loadBgComponent(item);
+//                            me.loadBgComponent(item);
                         }
                     }
                     else {
@@ -3177,10 +3400,10 @@
                         else {
                             // 发送给后台组件
 //                            backgroundLastMessage.set(item, [msg, args]);
-//                            this.loadBgComponent(item);
+//                            me.loadBgComponent(item);
                         }
                     }
-                }, this);
+                });
             },
 
             // 显示当前容器中 name 所指定的组件，并且隐藏此容器中其它组件
@@ -3249,15 +3472,18 @@
                     // 当前名字下的所有组件
                     if (com) {
                         // 判断至少有一个组件已加载
-                        loaded = com.some(function(value) {
-                            return value.loaded;
+                        $.each(com, function(index, value){
+                            if (value.loaded) {
+                                loaded = true;
+                                return false;
+                            }
                         });
 
                         if (loaded && subscriptions.has(name + msg)) {
-                            subscriptions.get(name + msg).forEach(function(func) {
+                            $.each(subscriptions.get(name + msg), function(i, func) {
                                 // 谁作为 this 需要考虑下
                                 func.apply(func, [args, msg]);
-                            }, this);
+                            });
                         }
                     }
                 }
@@ -3265,17 +3491,17 @@
                     // 当前名字下的第 index 个组件
                     if (com && com[nameObj.index] && com[nameObj.index].loaded) {
                         if (subscriptions.has(name + msg)) {
-                            subscriptions.get(name + msg).forEach(function(func) {
+                            $.each(subscriptions.get(name + msg), function(i, func) {
                                 // 谁作为 this 需要考虑下
                                 func.apply(func, [args, msg]);
-                            }, this);
+                            });
                         }
 
                         if (subscriptions.has(nameObj.name + msg)) {
-                            subscriptions.get(nameObj.name + msg).forEach(function(func) {
+                            $.each(subscriptions.get(nameObj.name + msg), function(i, func) {
                                 // 谁作为 this 需要考虑下
                                 func.apply(func, [args, msg]);
-                            }, this);
+                            });
                         }
                     }
                 }
@@ -3293,6 +3519,8 @@
                 var funcName;
                 var com;
 
+                var me = this;
+
                 com = components.get(nameObj.name);
 
                 if (!com) {
@@ -3303,7 +3531,7 @@
                     // 返回数组
                     agentExportObject = [];
 
-                    com.forEach(function(item){
+                    $.each(com, function(index, item){
                         if (!item.loaded) {
                             return;
                         }
@@ -3315,7 +3543,7 @@
                         });
 
                         for (x in item.instance) {
-                            if (Object.isFunction(item.instance[x])) {
+                            if ($.isFunction(item.instance[x])) {
                                 match = /^(.+?)Action$/.exec(x);
                                 if (match) {
                                     funcName = match[1].trim();
@@ -3332,7 +3560,7 @@
 
                         agentExportObject.push(agentObject);
 
-                    }, this);
+                    });
                 }
                 else {
                     if (com[nameObj.index] && com[nameObj.index].loaded) {
@@ -3344,7 +3572,7 @@
                         });
 
                         for (x in agentObject) {
-                            if (Object.isFunction(agentObject[x])) {
+                            if ($.isFunction(agentObject[x])) {
                                 match = /^(.+?)Action$/.exec(x);
                                 if (match) {
                                     funcName = match[1].trim();
@@ -3424,14 +3652,14 @@
 
             // 额外路由
             var reg, isMatch = false;
-            additionRouter.forEach(function(item, index) {
-                Object.map(item, function(value, key){
+            $.each(additionRouter, function(index, item) {
+                $.map(item, function(value, key){
                     key = key.replace(/:num/gi, '[0-9]+');
                     key = key.replace(/:any/gi, '.*');
 
                     reg = new RegExp('^' + key + '$');
                     if (result.uri.match(reg)) {
-                        if (value.contains('$') && key.contains('(')) {
+                        if (value.indexOf('$') >= 0 && key.indexOf('(') >= 0) {
                             value = result.uri.replace(reg, value);
                         }
                         isMatch = true;
@@ -3452,8 +3680,8 @@
                 defaultName = name || defaultName;
 
                 TF.Core.Application.subscribe('GlobalComponentLoaded', function(){
-                    locationHash.on('hashChanged', function(e){
-                        callback(e.hash);
+                    addEvent(locationHash, 'hashChanged', function(e, param){
+                        callback(param.hash);
                     });
                     locationHash.start();
                 });
@@ -3508,7 +3736,7 @@
     TF.define = function(name, options) {
         var appName;
 
-        if (Object.isString(name)) {
+        if ($.type(name) == 'string') {
             appName = TF.Helper.Utility.getApplicationName(name);
             name = TF.Helper.Utility.getComponentName(name);
 
@@ -3524,7 +3752,7 @@
     };
 
 
-    Dom.ready(function(){
+    $(document).ready(function(){
         appReady = true;
         TF.Core.Application.publish('DomReady');
         // 执行页面默认的装载完成函数
