@@ -3,8 +3,8 @@
 <head>
     <title>demo1</title>
     <meta charset="utf-8" />
-    <script src="http://javascript.u.qiniudn.com/qwrap/115.js"></script>
-    <script src="../src/qwrap/transformers.js"></script>
+    <script src="http://javascript.u.qiniudn.com/jquery/1110.js"></script>
+    <script src="../src/jquery/transformers.js"></script>
 </head>
 <body>
 
@@ -32,37 +32,58 @@ TF.Core.Application.create({
 });
 
 // 名为 Home 的组件
-TF.Component.Home = TF.Core.ComponentMgr.create({
+TF.define('Home', {
     // 组件 DOM 准备就绪会调用 DomReady 方法
     DomReady: function() {
-        console.log('ready!');
+        console.log('Home ready!');
     },
 
     // Action 是组件对外的接口
     testAction: function(args) {
-        console.log('test!');
-
-        // 渲染静态模板
-        this.sys.renderStaticTemplate('content');
-
+        console.log(args + ' Home test!');
+        
         this.renderOk();
     },
 
     // 组件私有方法，外部无法访问
     renderOk: function() {
-        console.log('render OK!');
+        console.log('Home render OK!');
+    }
+});
+
+// 名为 MyHome 的组件
+TF.define('MyHome', {
+    Mentor: {
+        name: 'Home'
+    },
+
+    // 组件 DOM 准备就绪会调用 DomReady 方法
+    DomReady: function() {
+        this._super();
+
+        console.log('ready!');
+    },
+
+    // Action 是组件对外的接口
+    testAction: function(args) {
+        // 渲染静态模板
+        this.sys.renderStaticTemplate('content');
+
+        this._super('My');
+
+        console.log('test!');
     }
 });
 
 TF.Core.ComponentMgr.add([{
-    name: 'Home',
+    name: 'MyHome',
     appendRender: false,
     lazyRender: false,
     hide: false,
     applyTo: '#content'
 }]);
 
-TF.Ready = function(){
+TF.ready = function(){
     TF.Core.Application.bootstrap();
 };
 </script>

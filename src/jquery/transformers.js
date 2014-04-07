@@ -119,6 +119,41 @@
         });
     };
 
+    /**
+     * unserialize
+     *
+     * Takes a string in format "param1=value1&param2=value2" and returns an object { param1: 'value1', param2: 'value2' }. If the "param1" ends with "[]" the param is treated as an array.
+     *
+     * Example:
+     *
+     * Input:  param1=value1&param2=value2
+     * Return: { param1 : value1, param2: value2 }
+     *
+     * Input:  param1[]=value1&param1[]=value2
+     * Return: { param1: [ value1, value2 ] }
+     *
+     * @todo Support params like "param1[name]=value1" (should return { param1: { name: value1 } })
+     * Usage example: console.log($.unserialize("one="+escape("& = ?")+"&two="+escape("value1")+"&two="+escape("value2")+"&three[]="+escape("value1")+"&three[]="+escape("value2")));
+     */
+    var unserialize = function(serializedString) {
+        var str = decodeURI(serializedString); 
+        var pairs = str.split('&');
+        var obj = {}, p, idx;
+        for (var i=0, n=pairs.length; i < n; i++) {
+            p = pairs[i].split('=');
+            idx = p[0]; 
+            if (obj[idx] === undefined) {
+                obj[idx] = unescape(p[1]);
+            }else{
+                if (typeof obj[idx] == "string") {
+                    obj[idx]=[obj[idx]];
+                }
+                obj[idx].push(unescape(p[1]));
+            }
+        }
+        return obj;
+    };
+
 
     // ======================================
 
@@ -1244,17 +1279,32 @@
                 componentClass.prototype.Mentor.__path.push(fullName);
             }
             else {
-                // 把最后一级的父类方法转换一下放入当前实例
-                // 前提是子类重载了父类的方法
-                for (var i in mentorClass.prototype) {
-                    if (mentorClass.prototype.hasOwnProperty(i) && $.isFunction(mentorClass.prototype[i]) && $.isFunction(this._instance[i])) {
-                        this._instance['__parent__' + i] = mentorClass.prototype[i];
-                    }
-                }
-
+                // 把最后一级的父类方法放入当前实例
+                // 如果子类重载了父类的方法，则增加一个 _super 方法到当前实例中
+                // _super 方法参考了 http://ejohn.org/blog/simple-javascript-inheritance
                 mix(this._instance, mentorClass.prototype, function(des, src, key){
                     if (key == 'Mentor' || TF.Component[me.appName][me.name].prototype.hasOwnProperty(key)) {
-                        return des;
+                        if ($.isFunction(src) && $.isFunction(des) && /\b_super\b/.test(des)) {
+                            return (function(name, fn){
+                                return function() {
+                                    var tmp = this._super;
+
+                                    // Add a new ._super() method that is the same method
+                                    // but on the super-class
+                                    this._super = mentorClass.prototype[name];
+
+                                    // The method only need to be bound temporarily, so we
+                                    // remove it when we're done executing
+                                    var ret = fn.apply(this, arguments);        
+                                    this._super = tmp;
+
+                                    return ret;
+                                };
+                            })(key, des);
+                        }
+                        else {                        
+                            return des;
+                        }
                     }
                     else {
                         return src;
@@ -1305,7 +1355,7 @@
                         if (!des) {
                             des = {};
                         }
-                        return mix(des, src.queryUrl(), true);
+                        return mix(des, unserialize(src), true);
                     }
                     else {
                         return des;
