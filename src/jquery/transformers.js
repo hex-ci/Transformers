@@ -26,13 +26,11 @@
     var TF,
         Transformers = TF = Transformers || {
         'version': '1.2.0',
-        'build': '20140404'
+        'build': '20140409'
     };
 
     var proxy = $.proxy;
     var extend = $.extend;
-    var addEvent = $.event.add;
-    var triggerEvent = $.event.trigger;
 
     // ===================================
 
@@ -136,12 +134,12 @@
      * Usage example: console.log($.unserialize("one="+escape("& = ?")+"&two="+escape("value1")+"&two="+escape("value2")+"&three[]="+escape("value1")+"&three[]="+escape("value2")));
      */
     var unserialize = function(serializedString) {
-        var str = decodeURI(serializedString); 
+        var str = decodeURI(serializedString);
         var pairs = str.split('&');
         var obj = {}, p, idx;
         for (var i=0, n=pairs.length; i < n; i++) {
             p = pairs[i].split('=');
-            idx = p[0]; 
+            idx = p[0];
             if (obj[idx] === undefined) {
                 obj[idx] = unescape(p[1]);
             }else{
@@ -152,6 +150,44 @@
             }
         }
         return obj;
+    };
+
+    // 添加自定义事件
+    var addEvent = function(obj, eventName, callback) {
+        if (!obj.__TFListeners) {
+            obj.__TFListeners = {};
+        }
+
+        if (!obj.__TFListeners[eventName]) {
+            obj.__TFListeners[eventName] = $.Callbacks();
+        }
+
+        obj.__TFListeners[eventName].add(callback);
+    };
+
+    // 删除自定义事件
+    var removeEvent = function(obj, eventName, callback) {
+        if (!obj.__TFListeners || !obj.__TFListeners[eventName]) {
+            return;
+        }
+
+        if (callback) {
+            obj.__TFListeners[eventName].remove(callback);
+        }
+        else {
+            obj.__TFListeners[eventName].empty();
+        }
+    };
+
+    // 触发自定义事件
+    var triggerEvent = function(eventName, param, obj) {
+        if (!obj.__TFListeners) {
+            return;
+        }
+
+        if (obj.__TFListeners[eventName]) {
+            obj.__TFListeners[eventName].fireWith(obj, $.makeArray(param));
+        }
     };
 
 
@@ -305,7 +341,7 @@
         };
 
         return exports;
-    }
+    }();
 
 
 
@@ -1108,8 +1144,6 @@
         };
         mix(this.options, options, true);
 
-        //CustEvent.createEvents(this, ['instanced', 'complete', 'failure']);
-
         // 判断是加载到全局组件管理器，还是私有组件管理器中
         this.componentMgrInstance = componentMgrInstance ? componentMgrInstance : TF.Core.ComponentMgr;
 
@@ -1132,7 +1166,7 @@
         },
 
         on: function(eventName, callback) {
-            return $.event.add(this, eventName, callback);
+            return addEvent(this, eventName, callback);
         },
 
         load: function() {
@@ -1140,25 +1174,34 @@
         },
 
         _preload: function() {
+            var me = this;
+
             // Application Name 不存在则创建
             TF.Component[this.appName] = TF.Component[this.appName] || {};
 
-            var isLoad = (typeof TF.Component[this.appName][this.name] != 'undefined');
+            var isLoad = (typeof TF.Component[this.appName][this.name] !== 'undefined');
             if (isLoad) {
                 this._createInstance();
             }
             else {
-                $.getScript(TF.Helper.Utility.getComponentJsUrl(this.appName, this.name), proxy(function(){
-                    if (typeof TF.Component[this.appName][this.name] != 'undefined') {
+                $.getScript(TF.Helper.Utility.getComponentJsUrl(this.appName, this.name))
+                .done(function(){
+                    if (typeof TF.Component[me.appName][me.name] !== 'undefined') {
                         // 加载成功
-                        this._createInstance();
+                        me._createInstance();
                     }
                     else {
                         // 加载失败
                         // 应该返回错误，或者记录日志
-                        this._failure();
+                        me._failure();
                     }
-                }, this));
+                })
+                .fail(function( jqxhr, settings, exception ){
+                    console && console.error(exception.message);
+                    // 加载失败
+                    // 应该返回错误，或者记录日志
+                    me._failure();
+                });
             }
         },
 
@@ -1295,14 +1338,14 @@
 
                                     // The method only need to be bound temporarily, so we
                                     // remove it when we're done executing
-                                    var ret = fn.apply(this, arguments);        
+                                    var ret = fn.apply(this, arguments);
                                     this._super = tmp;
 
                                     return ret;
                                 };
                             })(key, des);
                         }
-                        else {                        
+                        else {
                             return des;
                         }
                     }
@@ -1663,7 +1706,7 @@
             var me = this;
 
             // 如果是取消的请求，则什么也不做，我们只关心真正请求回来的数据，而不关心请求的状态
-            if (jqXHR && jqXHR.statusText == 'canceled') {
+            if (jqXHR && jqXHR.statusText == 'abort') {
                 return;
             }
 
@@ -2299,7 +2342,8 @@
             }
             mix(ajaxOptions, options, true);
 
-            var tagName = $(ajaxOptions.data).prop('tagName');
+            var el = $(ajaxOptions.data);
+            var tagName = el.prop('tagName');
 
             if (tagName && tagName.toLowerCase() == 'form') {
                 ajaxOptions.data = el.serialize();
@@ -2334,7 +2378,7 @@
             }
 
             // 如果是取消的请求，则什么也不做，我们只关心真正请求回来的数据，而不关心请求的状态
-            if (jqXHR.statusText == 'canceled') {
+            if (jqXHR.statusText == 'abort') {
                 return;
             }
 
@@ -2876,7 +2920,7 @@
                 me.layoutData.tabs.set(item.name, index);
             });
 
-            this.layoutData.tab = new QW.TabView(this.find(cls || ''), {
+            this.layoutData.tab = new QW.TabView(this.find(cls || '')[0], {
                 tabSelector: '.le-tabs li',
                 viewSelector: '.views .view-item',
                 selectedClass: 'active',
@@ -3040,8 +3084,6 @@
         };
         mix(this.sys, componentSys);
 
-        //CustEvent.createEvents(this, ['complete', 'failure', 'refreshReady', 'ready']);
-
         this.initialize(options);
 
         return this;
@@ -3084,7 +3126,7 @@
         },
 
         on: function(eventName, callback) {
-            return $.event.add(this, eventName, callback);
+            return addEvent(this, eventName, callback);
         }
     });
 
@@ -3154,11 +3196,11 @@
 
         var getFullName = TF.Helper.Utility.getFullComponentName;
 
-        var loadComplete = function(e, param) {
+        var loadComplete = function(param) {
             var fullName = getFullName(param.fullName);
 
             if (param.instance == null) {
-                $.error('Error: Component "' + fullName + '" load error! Please check Component Class Name!');
+                $.error('Error: Component "' + fullName + '" load error! Please check Component Class Name or Define!');
             }
 
             var currentObj = components.get(fullName)[param.instance.options.__index || 0];
@@ -3168,10 +3210,9 @@
 
             progressLength++;
 
-            if (progressLength >= length){
+            if (progressLength >= length) {
                 completeProgress();
             }
-
         };
 
         // 最终全部完成
@@ -3187,17 +3228,17 @@
             }
         };
 
-        var renderComplete = function(e, param) {
+        var renderComplete = function(param) {
             if (param.instance && !param.instance.options.lazyRender) {
                 addEvent(param.instance, 'ready', loadComplete);
             }
             else {
-                loadComplete(e, param);
+                loadComplete(param);
             }
         };
 
-        var loadFirstComplete = function(e, param) {
-            loadComplete(e, param);
+        var loadFirstComplete = function(param) {
+            loadComplete(param);
 
             var fullName = getFullName(param.fullName);
 
@@ -3210,12 +3251,12 @@
             });
         };
 
-        var renderFirstComplete = function(e, param) {
+        var renderFirstComplete = function(param) {
             if (param.instance && !param.instance.options.lazyRender) {
                 addEvent(param.instance, 'ready', loadComplete);
             }
             else {
-                loadComplete(e, param);
+                loadComplete(param);
             }
 
             var fullName = getFullName(param.fullName);
@@ -3733,7 +3774,7 @@
                 defaultName = name || defaultName;
 
                 TF.Core.Application.subscribe('GlobalComponentLoaded', function(){
-                    addEvent(locationHash, 'hashChanged', function(e, param){
+                    addEvent(locationHash, 'hashChanged', function(param){
                         callback(param.hash);
                     });
                     locationHash.start();
