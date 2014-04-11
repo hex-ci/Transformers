@@ -1,4 +1,4 @@
-/*
+/*!
 *
 * Transformers for jQuery
 *
@@ -23,10 +23,12 @@
     }
 }(this, function() {
 
+    "use strict";
+
     var TF,
         Transformers = TF = Transformers || {
         'version': '1.2.0',
-        'build': '20140409'
+        'build': '20140411'
     };
 
     var proxy = $.proxy;
@@ -47,7 +49,7 @@
      */
     var mix = function(des, src, override) {
         if (typeof override == 'function') {
-            for (i in src) {
+            for (var i in src) {
                 des[i] = override(des[i], src[i], i);
             }
         }
@@ -2033,7 +2035,7 @@
         _delegateJsEvent: function(){
             var me = this;
 
-            this.topElement.delegate('.tf-click', 'click', function(e) {
+            this.topElement.delegate('[tf-event-click]', 'click', function(e) {
                 e.stopPropagation();
 
                 if (this.tagName.toLowerCase() == 'a') {
@@ -2054,7 +2056,7 @@
                 }
             });
 
-            this.topElement.delegate('.tf-change', 'change', function(e) {
+            this.topElement.delegate('[tf-event-change]', 'change', function(e) {
                 e.stopPropagation();
 
                 e.__data = me._getBindingData(this);
@@ -3636,7 +3638,7 @@
                             __instance: item.instance
                         });
 
-                        for (x in item.instance) {
+                        for (var x in item.instance) {
                             if ($.isFunction(item.instance[x])) {
                                 match = /^(.+?)Action$/.exec(x);
                                 if (match) {
