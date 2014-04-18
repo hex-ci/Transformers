@@ -2456,7 +2456,6 @@
                     me.templateData[item] = args;
                 }
                 else if ($.isPlainObject(item)) {
-                    templateName = item.template;
                     html = me.find('.TFTemplate-' + item.template).html();
 
                     if ($.type(item.target) == 'string') {
