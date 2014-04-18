@@ -136,6 +136,10 @@
      * Usage example: console.log($.unserialize("one="+escape("& = ?")+"&two="+escape("value1")+"&two="+escape("value2")+"&three[]="+escape("value1")+"&three[]="+escape("value2")));
      */
     var unserialize = function(serializedString) {
+        if (!serializedString) {
+            return {};
+        }
+
         var str = decodeURI(serializedString);
         var pairs = str.split('&');
         var obj = {}, p, idx;
