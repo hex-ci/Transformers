@@ -2730,6 +2730,8 @@
                     target = item.target;
                 }
                 me.find('.TFTarget-' + target + ' .ComponentPager').delegate('a', 'click', function(e){
+                    var page;
+
                     e.stopPropagation();
                     e.preventDefault();
 
