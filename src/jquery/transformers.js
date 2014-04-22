@@ -2348,11 +2348,13 @@
             }
             mix(ajaxOptions, options, true);
 
-            var el = $(ajaxOptions.data);
-            var tagName = el.prop('tagName');
+            if ($.type(ajaxOptions.data) != 'string') {
+                var el = $(ajaxOptions.data);
+                var tagName = el.prop('tagName');
 
-            if (tagName && tagName.toLowerCase() == 'form') {
-                ajaxOptions.data = el.serialize();
+                if (tagName && tagName.toLowerCase() == 'form') {
+                    ajaxOptions.data = el.serialize();
+                }
             }
 
             if (!ajaxOptions.hasCache && ajaxOptions.type == 'get') {
