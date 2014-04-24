@@ -2056,7 +2056,7 @@
 
                 var eventName = $.camelCase($(this).attr('tf-event-click'));
                 if (me.instance && $.isFunction(me.instance[eventName + 'Event'])) {
-                    return me.instance[eventName + 'Event'].call(me.instance, e);
+                    return me.instance[eventName + 'Event'].call(me.instance, e, this);
                 }
             });
 
@@ -2069,7 +2069,7 @@
                 if (eventName) {
                     eventName = $.camelCase(eventName);
                     if (me.instance && $.isFunction(me.instance[eventName + 'Event'])) {
-                        return me.instance[eventName + 'Event'].call(me.instance, e);
+                        return me.instance[eventName + 'Event'].call(me.instance, e, this);
                     }
                 }
             });
@@ -2082,8 +2082,8 @@
 
             if (form.length > 0) {
                 form.off('submit');
-                form.on('submit', function(event) {
-                    event.preventDefault();
+                form.on('submit', function(e) {
+                    e.preventDefault();
                     var f = form.find('button.tf-default').first();
                     if (f) {
                         f.trigger('click');
@@ -2608,6 +2608,9 @@
                 url: url,
                 type: 'GET',
                 dataType: 'text',
+                xhrFields: {
+                    'withCredentials': true
+                },
                 complete: function(jqXHR, textStatus) {
                     if (args.loadingMsg !== false) {
                         me.unsetLoadingMsg();
