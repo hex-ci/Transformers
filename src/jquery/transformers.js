@@ -28,7 +28,7 @@
     var TF,
         Transformers = TF = Transformers || {
         'version': '1.2.0',
-        'build': '20140411'
+        'build': '20140514'
     };
 
     var proxy = $.proxy;
@@ -1691,7 +1691,7 @@
             }
 
             this.loader = $.ajax(this.options.url, {
-                data: this.options.data,
+                data: this.options.data || '',
                 type: 'GET',
                 timeout: 10000,
                 dataType: 'text',
@@ -1917,7 +1917,7 @@
                 triggerEvent('failure', this._getEventObject(), this.instance);
 
                 if (TF.Config[this.appName].debug) {
-                    console.error && console.error('Component [' + this.getComponentName() + '] load error!');
+                    console && console.error('Component [' + this.getComponentName() + '] load error!');
                 }
 
                 this.instance.LoadError();
@@ -1936,7 +1936,7 @@
         },
 
         _loadError: function(msg) {
-            console.error(msg);
+            console && console.error(msg);
         },
 
         _delegateEvent: function(configs){
@@ -1974,12 +1974,12 @@
             var targetElement;
             var targetName = '';
 
-            //console.log(me.templateData);
+            //console.log(bindingElement);
             //console.log($(this).parents('.tf-bind'));
 
             if (bindingElement.length > 0) {
                 // 这里可以通过自动查找 target name 实现无需在 data-bind 里填写模版名
-                targetElement = el.parents('[class|=TFTarget]');
+                targetElement = el.parents('[class*=TFTarget]');
 
                 if (targetElement.length > 0) {
                     // 解析 Target 名称
@@ -2348,7 +2348,7 @@
             }
             mix(ajaxOptions, options, true);
 
-            if ($.type(ajaxOptions.data) != 'string') {
+            if ($.type(ajaxOptions.data) == 'object') {
                 var el = $(ajaxOptions.data);
                 var tagName = el.prop('tagName');
 
@@ -2409,7 +2409,7 @@
             // 输出调试信息
             if (TF.Config[me.sys.appName].debug) {
                 var param = this.options.data && ($.type(this.options.data) == 'string' ? this.options.data : $.param(this.options.data));
-                console.debug && console.debug('url: ' + this.options.url + (param ? '?' + param : ''));
+                console && console.debug('url: ' + this.options.url + (param ? '?' + param : ''));
             }
 
             var isError = !mentor.Ajax.validation(me.sys.appName, result);
@@ -2620,7 +2620,7 @@
                     // 输出调试信息
                     if (TF.Config[me.appName].debug) {
                         var param = this.data && ($.type(this.data) == 'string' ? this.data : $.param(this.data));
-                        console.debug && console.debug('url: ' + this.url + (param ? '?' + param : ''));
+                        console && console.debug('url: ' + this.url + (param ? '?' + param : ''));
                     }
 
                     var response = responseText;
@@ -2914,7 +2914,7 @@
             this.layoutData.page = 0;
         },
 
-        createTabLayout: function(data, initPanel, cls) {
+        createTabLayout: function(data, initPanel, cls, options) {
             //[{'name':'mime', 'fn': '', 'page': '0'}, ]
             var me = this;
 
@@ -2932,7 +2932,7 @@
                 me.layoutData.tabs.set(item.name, index);
             });
 
-            this.layoutData.tab = new QW.TabView(this.find(cls || '')[0], {
+            this.layoutData.tab = new QW.TabView(this.find(cls || '')[0], options || {
                 tabSelector: '.le-tabs li',
                 viewSelector: '.views .view-item',
                 selectedClass: 'active',
