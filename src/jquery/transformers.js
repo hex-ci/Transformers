@@ -3677,7 +3677,7 @@
                             __instance: agentObject
                         });
 
-                        for (x in agentObject) {
+                        for (var x in agentObject) {
                             if ($.isFunction(agentObject[x])) {
                                 match = /^(.+?)Action$/.exec(x);
                                 if (match) {

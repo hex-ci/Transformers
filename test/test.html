@@ -8,14 +8,32 @@
     <script src="../src/jquery/transformers.js"></script>
   </head>
   <body>
+    <div id="content" class="TFComponent">
+        <div>
+            <!--
+                指定 tf-action-click 属性会给此元素绑定 click 事件
+                事件处理器是组件的 testAction 方法
+            -->
+            <button type="button" class="js-test" tf-action-click="test">测试</button>
+        </div>
+
+        <!-- content 模板的目标渲染节点 -->
+        <div class="TFTarget-content"></div>
+
+        <!-- 名为 content 的模板 -->
+        <script type="text/html" class="TFTemplate-content">
+        你好！世界！
+        </script>
+    </div>
+
+
     <div id="mocha"></div>
     <script src="mocha.js"></script>
     <script src="chai.js"></script>
     <script>mocha.setup('bdd')</script>
-    <script>expect = chai.expect</script>
     <script src="test.js"></script>
     <script>
-      mocha.run();
+        mocha.run();
     </script>
   </body>
 </html>
