@@ -2709,7 +2709,15 @@
             }
 
             // 如果已经发送请求，则取消上一个请求
-            var currentRequester = this.templateRequester.get(name.join());
+            var requestName = $.map(name, function(item){
+                if ($.isPlainObject(item)) {
+                    return $.param(item);
+                }
+                else {
+                    return item;
+                }
+            });
+            var currentRequester = this.templateRequester.get(requestName.join());
             if (currentRequester) {
                 currentRequester.abort();
             }
