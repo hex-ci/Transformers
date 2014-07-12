@@ -143,18 +143,21 @@
         var str = decodeURI(serializedString);
         var pairs = str.split('&');
         var obj = {}, p, idx;
-        for (var i=0, n=pairs.length; i < n; i++) {
+
+        for (var i = 0, n = pairs.length; i < n; i++) {
             p = pairs[i].split('=');
             idx = p[0];
             if (obj[idx] === undefined) {
                 obj[idx] = unescape(p[1]);
-            }else{
+            }
+            else {
                 if (typeof obj[idx] == "string") {
-                    obj[idx]=[obj[idx]];
+                    obj[idx] = [obj[idx]];
                 }
                 obj[idx].push(unescape(p[1]));
             }
         }
+
         return obj;
     };
 
@@ -1137,19 +1140,21 @@
                 var isLoad = (typeof TF.Component[appName][name] != 'undefined');
 
                 if (isLoad) {
+                    // 组件类已加载
                     mentor = TF.Component[appName][name].prototype.Mentor;
                     if (mentor && mentor.name) {
                         me._loadMentor(function(){
                             me._initMentor(fullName, parentClass, TF.Component[appName][name]);
-                            callback.call();
+                            callback();
                         }, mentor.name, TF.Component[appName][name]);
                     }
                     else {
                         me._initMentor(fullName, parentClass, TF.Component[appName][name]);
-                        callback.call();
+                        callback();
                     }
                 }
                 else {
+                    // 组件类未加载
                     $.getScript(TF.Helper.Utility.getComponentJsUrl(appName, name), function(){
                         if (typeof TF.Component[appName][name] != 'undefined') {
                             // 加载成功
@@ -1157,12 +1162,12 @@
                             if (mentor && mentor.name) {
                                 me._loadMentor(function(){
                                     me._initMentor(fullName, parentClass, TF.Component[appName][name]);
-                                    callback.call();
+                                    callback();
                                 }, mentor.name, TF.Component[appName][name]);
                             }
                             else {
                                 me._initMentor(name, parentClass, TF.Component[appName][name]);
-                                callback.call();
+                                callback();
                             }
                         }
                         else {
@@ -1177,111 +1182,93 @@
                     this._loadMentor(callback, this._instance.Mentor.name);
                 }
                 else {
-                    callback.call();
+                    callback();
                 }
             }
         },
 
+        // 初始化继承的组件
         _initMentor: function(fullName, componentClass, mentorClass) {
             var me = this;
+            var dest;
+            var sourPrototype;
+            var metroPrototype = mentorClass.prototype;
 
             componentClass = componentClass || this._instance;
 
-            // 把最后一级的父类方法放入当前实例
-            // 如果子类重载了父类的方法，则增加一个 _super 方法到当前实例中
-            // _super 方法参考了 http://ejohn.org/blog/simple-javascript-inheritance
-
             if ($.isFunction(componentClass)) {
-                mix(componentClass.prototype, mentorClass.prototype, function(des, src, key){
-                    if (key == 'Mentor' || componentClass.prototype.hasOwnProperty(key)) {
+                dest = componentClass.prototype;
+                sourPrototype = componentClass.prototype;
+            }
+            else {
+                dest = this._instance;
+                sourPrototype = TF.Component[this.appName][this.name].prototype;
+            }
 
-                        if ($.isFunction(src) && $.isFunction(des) && /\b_super\b/.test(des)) {
-                            return (function(name, fn){
-                                return function() {
-                                    var tmp = this._super;
+            // 把父类方法放入子类或当前实例
+            mix(dest, metroPrototype, function(des, src, key){
+                if (key == 'Mentor' || sourPrototype.hasOwnProperty(key)) {
+                    // 如果子类重载了父类的方法，则增加一个 _super 方法到当前实例中
+                    // _super 方法参考了 http://ejohn.org/blog/simple-javascript-inheritance
+                    if ($.isFunction(src) && $.isFunction(des) && /\b_super\b/.test(des)) {
+                        return (function(name, fn){
+                            return function() {
+                                var tmp = this._super;
 
-                                    // Add a new ._super() method that is the same method
-                                    // but on the super-class
-                                    this._super = mentorClass.prototype[name];
+                                // Add a new ._super() method that is the same method
+                                // but on the super-class
+                                this._super = metroPrototype[name];
 
-                                    // The method only need to be bound temporarily, so we
-                                    // remove it when we're done executing
-                                    var ret = fn.apply(this, arguments);
-                                    this._super = tmp;
+                                // The method only need to be bound temporarily, so we
+                                // remove it when we're done executing
+                                var ret = fn.apply(this, arguments);
+                                this._super = tmp;
 
-                                    return ret;
-                                };
-                            })(key, des);
-                        }
-                        else {
-                            return des;
-                        }
-
+                                return ret;
+                            };
+                        })(key, des);
                     }
                     else {
-                        return src;
-                    }
-                });
-
-                // 设置是否使用借用组件的视图
-                if (componentClass.prototype.Mentor.useMentorView) {
-                    componentClass.prototype.Mentor.useMentorView = false;
-                    componentClass.prototype.Mentor.useView = fullName;
-                }
-                else if (componentClass.prototype.Mentor.useView) {
-                    componentClass.prototype.Mentor.useView = mentorClass.prototype.Mentor.useView;
-                }
-
-                if (mentorClass.prototype.Mentor) {
-                    mix(componentClass.prototype.Mentor.viewData, mentorClass.prototype.Mentor.viewData, true);
-
-                    if (mentorClass.prototype.Mentor.__path) {
-                        componentClass.prototype.Mentor.__path = mentorClass.prototype.Mentor.__path;
-                    }
-                    else {
-                        componentClass.prototype.Mentor.__path = [];
+                        return des;
                     }
                 }
                 else {
-                    componentClass.prototype.Mentor.__path = [];
+                    return src;
+                }
+            });
+
+            if ($.isFunction(componentClass)) {
+                // 设置是否使用借用组件的视图
+                if (dest.Mentor.useMentorView) {
+                    dest.Mentor.useMentorView = false;
+                    dest.Mentor.useView = fullName;
+                }
+                else if (dest.Mentor.useView) {
+                    dest.Mentor.useView = metroPrototype.Mentor.useView;
                 }
 
-                componentClass.prototype.Mentor.__path.push(fullName);
-            }
-            else {
-                mix(this._instance, mentorClass.prototype, function(des, src, key){
-                    if (key == 'Mentor' || TF.Component[me.appName][me.name].prototype.hasOwnProperty(key)) {
-                        if ($.isFunction(src) && $.isFunction(des) && /\b_super\b/.test(des)) {
-                            return (function(name, fn){
-                                return function() {
-                                    var tmp = this._super;
+                if (metroPrototype.Mentor) {
+                    mix(dest.Mentor.viewData, metroPrototype.Mentor.viewData, true);
 
-                                    // Add a new ._super() method that is the same method
-                                    // but on the super-class
-                                    this._super = mentorClass.prototype[name];
-
-                                    // The method only need to be bound temporarily, so we
-                                    // remove it when we're done executing
-                                    var ret = fn.apply(this, arguments);
-                                    this._super = tmp;
-
-                                    return ret;
-                                };
-                            })(key, des);
-                        }
-                        else {
-                            return des;
-                        }
+                    if (metroPrototype.Mentor.__path) {
+                        dest.Mentor.__path = metroPrototype.Mentor.__path;
                     }
                     else {
-                        return src;
+                        dest.Mentor.__path = [];
                     }
-                });
+                }
+                else {
+                    dest.Mentor.__path = [];
+                }
+
+                dest.Mentor.__path.push(fullName);
+            }
+            else {
 
                 // 设置是否使用借用组件的视图
                 if (this._instance.Mentor.useMentorView) {
-                    if (mentorClass.prototype.Mentor && mentorClass.prototype.Mentor.useView) {
-                        this._instance.sys.viewName = mentorClass.prototype.Mentor.useView;
+                    if (metroPrototype.Mentor && metroPrototype.Mentor.useView) {
+                        this._instance.sys.viewName = metroPrototype.Mentor.useView;
                     }
                     else {
                         this._instance.sys.viewName = fullName;
@@ -1291,8 +1278,8 @@
                     this._instance.sys.viewName = this._instance.Mentor.useView;
                 }
 
-                if (mentorClass.prototype.Mentor && mentorClass.prototype.Mentor.__path) {
-                    this._instance.Mentor.__path = mentorClass.prototype.Mentor.__path;
+                if (metroPrototype.Mentor && metroPrototype.Mentor.__path) {
+                    this._instance.Mentor.__path = metroPrototype.Mentor.__path;
                     this._instance.Mentor.__path.push(fullName);
                 }
                 else {
@@ -1305,6 +1292,7 @@
 
         },
 
+        // 初始化组件实例
         _initInstance: function(mentorClass) {
             // 组件实例化正确才加载内容
             this._instanced = true;
@@ -1384,6 +1372,7 @@
     var defaultApplicationName = '';
 
     TF.Core.Application = {
+        // 创建应用
         create: function(name, config) {
             var appName = 'Transformers';
             var appConfig;
@@ -1450,23 +1439,20 @@
                 return el.tagName.toLowerCase().indexOf('tf:') === 0;
             });
 
-            //console.log(components);
             if (components.length > 0) {
                 var args;
                 var name;
                 var attributes;
                 var exclude = ['id', 'class', 'style'];
 
-                components.each(function(index, el){
+                components.each(function(index, el) {
                     el = $(el);
 
                     args = {};
 
                     name = TF.Helper.Utility.toComponentName(el.prop('tagName').toLowerCase().slice(3));
 
-                    //console.log(el[0].attributes);
                     attributes = $.makeArray(el[0].attributes);
-                    //console.log(attributes);
 
                     $.each(attributes, function(i, item){
                         if ($.inArray(item.name, exclude) < 0) {
@@ -1474,7 +1460,6 @@
                         }
                     });
 
-                    //console.log(args);
                     args.name = name;
                     args.replaceRender = true;
                     args.renderTo = el;
@@ -1630,6 +1615,7 @@
                 this.renderTabLayout(false, null, notRefresh);
             }
             else {
+                // TODO:
             }
         },
 
@@ -2233,9 +2219,7 @@
 
                 name = TF.Helper.Utility.toComponentName(el.prop('tagName').toLowerCase().slice(3));
 
-                //console.log(el[0].attributes);
                 attributes = $.makeArray(el[0].attributes);
-                //console.log(attributes);
 
                 $.each(attributes, function(i, item){
                     if ($.inArray(item.name, exclude) < 0) {
@@ -2249,7 +2233,6 @@
                     }
                 });
 
-                //console.log(args);
                 args.name = name;
                 args.replaceRender = true;
                 args.renderTo = el;
@@ -2847,7 +2830,8 @@
 
             // 处理前进后退
             if (this.layoutType) {
-                var values = TF.Core.Router.parseUri().params;
+                var uri = TF.Core.Router.parseUri();
+                var values = uri.params;
                 if (/p\d+/.test(values[values.length - 1])) {
                     values[values.length - 1] = 'p' + page;
                 }
@@ -2855,7 +2839,7 @@
                     values[values.length] = 'p' + page;
                 }
 
-                this.setRouterArgs(values);
+                this.setRouterArgs(values, uri.name);
             }
         },
 
@@ -2986,6 +2970,10 @@
 
         resetNormalLayoutPage: function() {
             this.layoutData.page = 0;
+        },
+
+        setNormalLayoutPage: function(page) {
+            this.layoutData.page = page || 0;
         },
 
         createTabLayout: function(data, initPanel, cls, options) {
