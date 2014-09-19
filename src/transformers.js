@@ -27,8 +27,8 @@
 
     var TF,
         Transformers = TF = Transformers || {
-        'version': '1.2.1',
-        'build': '20140626'
+        'version': '1.2.2',
+        'build': '20140918'
     };
 
     var proxy = $.proxy;
@@ -1326,6 +1326,10 @@
             this._instance.sys.appName = this.appName;
             this._instance.sys.name = this.name;
             this._instance.sys.index = this.options.__index || 0;
+            this._instance.sys.contentElement = this.options.__element;
+            // 只保存一份 fragment 就可以了
+            delete this._instance.options.__element;
+            delete this._instance.sys.options.__element;
             // 组件需要知道自己的父级组件管理器是谁
             this._instance.sys.parentComponentMgr = this.componentMgrInstance;
 
@@ -1452,6 +1456,16 @@
 
                     name = TF.Helper.Utility.toComponentName(el.prop('tagName').toLowerCase().slice(3));
 
+                    // 把自定义标签的内容存储成 Document Fragment
+                    var fragment;
+                    var fragmentElement = null;
+                    if (el.children().length > 0) {
+                        fragment = document.createDocumentFragment();
+                        fragment.appendChild($('<div></div>')[0]);
+                        fragmentElement = fragment.childNodes[0];
+                        fragmentElement.innerHTML = el.html();
+                    }
+
                     attributes = $.makeArray(el[0].attributes);
 
                     $.each(attributes, function(i, item){
@@ -1463,6 +1477,7 @@
                     args.name = name;
                     args.replaceRender = true;
                     args.renderTo = el;
+                    args.__element = fragmentElement;
 
                     componentMgr.add(args);
                 });
@@ -2121,11 +2136,14 @@
                     el.off('submit');
                     el.on('submit', function(e) {
                         e.preventDefault();
-                        var f = $(e.target).find('button.tf-default').first();
-                        if (f) {
-                            f.trigger('click');
-                        }
+//                        var f = $(e.target).find('button.tf-default').first();
+//                        if (f) {
+//                            f.trigger('click');
+//                        }
                     });
+
+                    el.find('button.tf-default').attr('type', 'submit');
+
                     // 如果没有 type=submit 的按钮则添加一个
 //                    if (el.find('button[type=submit]').length == 0) {
 //                        el.append($('<div style="position:absolute;left:-9999px;top:-9999px;"><button type="submit"></button></div>'));
@@ -2219,6 +2237,16 @@
 
                 name = TF.Helper.Utility.toComponentName(el.prop('tagName').toLowerCase().slice(3));
 
+                // 把自定义标签的内容存储成 Document Fragment
+                var fragment;
+                var fragmentElement = null;
+                if (el.children().length > 0) {
+                    fragment = document.createDocumentFragment();
+                    fragment.appendChild($('<div></div>')[0]);
+                    fragmentElement = fragment.childNodes[0];
+                    fragmentElement.innerHTML = el.html();
+                }
+
                 attributes = $.makeArray(el[0].attributes);
 
                 $.each(attributes, function(i, item){
@@ -2236,6 +2264,7 @@
                 args.name = name;
                 args.replaceRender = true;
                 args.renderTo = el;
+                args.__element = fragmentElement;
 
                 me.componentMgr.add(args);
             });
@@ -2427,6 +2456,8 @@
         // 注意这里的 this 已经换成 ajax context 所指对象
         _sendComplete: function(jqXHR) {
             var me = this.instance;
+
+            me.sys.sendRequester.erase(this.options.url);
 
             if (this.options.loadingMsg !== false) {
                 me.sys.unsetLoadingMsg();
@@ -2651,6 +2682,15 @@
 //                url = TF.Helper.Utility.siteUrl(url);
 //            }
 
+            var requestName = $.map(name, function(item){
+                if ($.isPlainObject(item)) {
+                    return $.param(item);
+                }
+                else {
+                    return item;
+                }
+            });
+
             var ajaxOptions = {
                 url: url,
                 type: 'GET',
@@ -2659,11 +2699,15 @@
                     'withCredentials': true
                 },
                 complete: function(jqXHR, textStatus) {
+                    me.templateRequester.erase(requestName.join());
+
                     if (args.loadingMsg !== false) {
                         me.unsetLoadingMsg();
                     }
                 },
                 success: function(responseText, textStatus, jqXHR) {
+                    me.templateRequester.erase(requestName.join());
+
                     // 输出调试信息
                     if (TF.Config[me.appName].debug) {
                         var param = this.data && ($.type(this.data) == 'string' ? this.data : $.param(this.data));
@@ -2756,14 +2800,6 @@
             }
 
             // 如果已经发送请求，则取消上一个请求
-            var requestName = $.map(name, function(item){
-                if ($.isPlainObject(item)) {
-                    return $.param(item);
-                }
-                else {
-                    return item;
-                }
-            });
             var currentRequester = this.templateRequester.get(requestName.join());
             if (currentRequester) {
                 currentRequester.abort();
@@ -3160,7 +3196,9 @@
             // 组件索引值
             index: 0,
             // 组件最后获取的 URI 参数
-            lastArgs: []
+            lastArgs: [],
+            // 使用自定义标签引入组件时，标签子节点存储在这个属性中
+            contentElement: null
         };
         mix(this.sys, componentSys);
 
