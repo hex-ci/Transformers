@@ -27,8 +27,8 @@
 
     var TF,
         Transformers = TF = Transformers || {
-        'version': '1.2.2',
-        'build': '20140918'
+        'version': '1.2.3',
+        'build': '20141020'
     };
 
     var proxy = $.proxy;
@@ -141,7 +141,7 @@
         }
 
         var str = decodeURI(serializedString);
-        var pairs = str.split('&');
+        var pairs = str.replace(/\+/g, ' ').split('&');
         var obj = {}, p, idx;
 
         for (var i = 0, n = pairs.length; i < n; i++) {
@@ -1722,6 +1722,9 @@
 
             if (!this.options.hasCache) {
                 this.options.data = this.options.data || {};
+                if ($.isString(this.options.data)) {
+                    this.options.data = unserialize(this.options.data);
+                }
                 this.options.data['_reqno'] = TF.Helper.Utility.random();
             }
 
@@ -2427,8 +2430,11 @@
                 }
             }
 
-            if (!ajaxOptions.hasCache && ajaxOptions.type == 'get') {
+            if (!ajaxOptions.hasCache && ajaxOptions.type == 'GET') {
                 ajaxOptions.data = ajaxOptions.data || {};
+                if ($.isString(ajaxOptions.data)) {
+                    ajaxOptions.data = unserialize(ajaxOptions.data);
+                }
                 ajaxOptions.data['_reqno'] = TF.Helper.Utility.random();
             }
 
@@ -2796,6 +2802,9 @@
 
             if (!ajaxOptions.hasCache && ajaxOptions.type == 'GET') {
                 ajaxOptions.data = ajaxOptions.data || {};
+                if ($.isString(ajaxOptions.data)) {
+                    ajaxOptions.data = unserialize(ajaxOptions.data);
+                }
                 ajaxOptions.data['_reqno'] = TF.Helper.Utility.random();
             }
 
@@ -3933,10 +3942,14 @@
                 return result;
             },
 
-            go: function(uri, url) {
+            go: function(uri, url, isReload) {
                 if (url) {
-                    //console.log(url + '#tf-' + encodeURI(uri));
-                    location.href = url + '#tf-' + encodeURI(uri);
+                    if (isReload && location.pathname == url && location.hash == '#tf-' + encodeURI(uri)) {
+                        location.reload();
+                    }
+                    else {
+                        location.href = url + '#tf-' + encodeURI(uri);
+                    }
                 }
                 else if (locationHash) {
                     locationHash.setHash('tf-' + uri);
