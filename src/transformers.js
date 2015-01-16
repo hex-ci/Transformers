@@ -27,8 +27,8 @@
 
     var TF,
         Transformers = TF = Transformers || {
-        'version': '1.2.3',
-        'build': '20141020'
+        'version': '1.3.0',
+        'build': '20141105'
     };
 
     var proxy = $.proxy;
@@ -2233,12 +2233,22 @@
                 me.componentMgr.add(args);
             });
 
+            // 组件名计数器
+            var componentNames = {};
+
             $.each(components2, function(index, el){
                 el = $(el);
 
                 args = {};
 
                 name = TF.Helper.Utility.toComponentName(el.prop('tagName').toLowerCase().slice(3));
+
+                if (typeof componentNames[name] == 'undefined') {
+                    componentNames[name] = 0;
+                }
+                else {
+                    componentNames[name]++;
+                }
 
                 // 把自定义标签的内容存储成 Document Fragment
                 var fragment;
@@ -2256,7 +2266,21 @@
                     if ($.inArray(item.name, exclude) < 0) {
                         if (item.name.indexOf('data-view-') === 0) {
                             args.data = args.data || {};
-                            args.data[item.name.substr(10)] = item.value;
+                            args.data[item.name.substr(10)] = ((item.name == item.value || item.value === '') ? true : item.value);
+                        }
+                        else if (item.name.indexOf('tf-on-') === 0) {
+                            var actionName = $.camelCase(item.value);
+                            if (me.instance && $.isFunction(me.instance[actionName])) {
+                                me.componentMgr.subscribe(name + '[' + componentNames[name] + ']', item.name.substr(6), function(){
+                                    var newName = name + '[' + componentNames[name] + ']';
+                                    return function(args) {
+                                        this[actionName]({
+                                            target: newName,
+                                            args: args
+                                        });
+                                    };
+                                }(), me.instance);
+                            }
                         }
                         else {
                             args[$.camelCase(item.name)] = ((item.name == item.value || item.value === '') ? true : item.value);
@@ -2561,7 +2585,8 @@
                         }
                         else {
                             className = 'gen-' + TF.Helper.Utility.random();
-                            $(item.target).addClass('TFTarget-' + className).html(mentor.Template.render(me.appName, html, args));
+                            $(item.target).addClass('TFTarget-' + className);
+                            $(item.target).html(mentor.Template.render(me.appName, html, args));
                         }
 
                         item.target = className;
@@ -2734,10 +2759,10 @@
 
                     // 数据过滤器，在这里可以进行一些显示前的处理。
                     if (result && typeof(args) != 'undefined' && $.isFunction(args.filter)) {
-                        var temp = args.filter(result);
+                        var temp = args.filter.call(me.instance, result);
 
                         if ($.isPlainObject(temp)) {
-                            mix(result, temp);
+                            mix(result, temp, true);
                         }
                     }
 
@@ -3315,6 +3340,7 @@
     TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallback){
         var length = 0,
             progressLength = 0,
+            failureLength = 0,
             // 组件关联数组，key 为组件名，value 为组件实例
             components = new TF.Library.Hash(),
             // 事件订阅列表
@@ -3349,6 +3375,11 @@
             if (progressLength >= length) {
                 completeProgress();
             }
+        };
+
+        var loadFailure = function(param) {
+            loadComplete(param);
+            failureLength++;
         };
 
         // 最终全部完成
@@ -3466,7 +3497,7 @@
                     }
                     else {
                         addEvent(obj, 'complete', (withRender ? renderComplete : loadComplete));
-                        addEvent(obj, 'failure', (withRender ? renderComplete : loadComplete));
+                        addEvent(obj, 'failure', (withRender ? renderComplete : loadFailure));
                     }
                     obj.load();
                 });
