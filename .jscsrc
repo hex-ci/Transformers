@@ -1,0 +1,3 @@
+{
+	"excludeFiles": [ "src/intro.js", "src/outro.js" ]
+}

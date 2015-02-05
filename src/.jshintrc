@@ -1,0 +1,52 @@
+{
+	"boss": true,
+	"curly": true,
+	"eqeqeq": false,
+	"eqnull": true,
+	"-W041": false,
+	"expr": true,
+	"immed": true,
+	"noarg": true,
+	"onevar": true,
+	
+	"smarttabs": true,
+	"trailing": true,
+	"undef": true,
+	"unused": false,
+
+	"sub": true,
+
+	"globals": {
+		"window": true,
+		"setTimeout": true,
+		"clearTimeout": true,
+		"setInterval": true,
+		"clearInterval": true,
+		"unserialize": true,
+		"proxy": true,
+		"document": true,
+		"mentor": true,
+		"triggerEvent": true,
+		"console": true,
+		"evalExp": true,
+		"mix": true,
+		"QW": true,
+		"addEvent": true,
+		"componentSys": true,
+		"location": true,
+		"top": true,
+		"defaultApplicationName": true,
+		"capitalize": true,
+		"defaultConfig": true,
+		"decamelize": true,
+		"defineComponentClass": true,
+		"unescape": true,
+
+		"TF": true,
+		"jQuery": true,
+		"define": true,
+		"module": true,
+		"$": true
+	}
+
+}
