@@ -5,6 +5,13 @@ Transformers
 
 基于 Javascript 的组件化开发框架，主要关注组件路由、组件消息传递和组件异步加载等，其中要解决的核心问题是组件间的解耦。
 
+如何安装
+------------
+
+```bash
+bower install transformers
+```
+
 如何构建
 ------------
 
