@@ -4,62 +4,34 @@ var mentor = {};
 
 // 页面状态提示相关方法
 mentor.Status = (function(){
-    var isfun = $.isFunction;
-    var cfg = TF.Config;
+    var funcations = [
+        'unsetStatusMsg',
+        'setSuccMsg',
+        'setFailMsg',
+        'setWarningMsg',
+        'setLoadingMsg',
+        'unsetLoadingMsg'
+    ];
 
-    var exports = {
-        unsetStatusMsg: function(appName) {
-            var mt = cfg[appName].mentor;
-
-            if (mt.Status && isfun(mt.Status.unsetStatusMsg)){
-                mt.Status.unsetStatusMsg.apply(mt.Status, [].slice.call(arguments, 1));
-            }
-        },
-
-        setSuccMsg: function(appName){
-            var mt = cfg[appName].mentor;
-
-            if (mt.Status && isfun(mt.Status.setSuccMsg)){
-                mt.Status.setSuccMsg.apply(mt.Status, [].slice.call(arguments, 1));
-            }
-        },
-
-        setFailMsg: function(appName){
-            if (!cfg[appName]) {
+    var func = function(name) {
+        return function(appName) {
+            if (!TF.Config[appName]) {
                 appName = defaultApplicationName;
             }
 
-            var mt = cfg[appName].mentor;
+            var mt = TF.Config[appName].mentor;
 
-            if (mt.Status && isfun(mt.Status.setFailMsg)){
-                mt.Status.setFailMsg.apply(mt.Status, [].slice.call(arguments, 1));
+            if (mt.Status && $.isFunction(mt.Status[name])){
+                mt.Status[name].apply(mt.Status, [].slice.call(arguments, 1));
             }
-        },
-
-        setWarningMsg: function(appName){
-            var mt = cfg[appName].mentor;
-
-            if (mt.Status && isfun(mt.Status.setWarningMsg)){
-                mt.Status.setWarningMsg.apply(mt.Status, [].slice.call(arguments, 1));
-            }
-        },
-
-        setLoadingMsg: function(appName) {
-            var mt = cfg[appName].mentor;
-
-            if (mt.Status && isfun(mt.Status.setLoadingMsg)){
-                mt.Status.setLoadingMsg.apply(mt.Status, [].slice.call(arguments, 1));
-            }
-        },
-
-        unsetLoadingMsg: function(appName) {
-            var mt = cfg[appName].mentor;
-
-            if (mt.Status && isfun(mt.Status.unsetLoadingMsg)){
-                mt.Status.unsetLoadingMsg.apply(mt.Status, [].slice.call(arguments, 1));
-            }
-        }
+        };
     };
+
+    var exports = {};
+
+    $.each(funcations, function(){
+        exports[this] = func(this);
+    });
 
     return exports;
 })();
