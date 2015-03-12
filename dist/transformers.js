@@ -1,5 +1,5 @@
 /*!
- * Transformers for jQuery v1.3.0
+ * Transformers for jQuery v1.3.1
  * https://github.com/CodeIgniter/Transformers
  *
  * 为 jQuery 实现一套组件化开发模式与框架
@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-02-05
+ * Date: 2015-03-12
  */
 
  ;(function(root, factory) {
@@ -27,8 +27,8 @@
 var TF, Transformers;
 
 Transformers = TF = Transformers || {
-    'version': '1.3.0',
-    'build': '20141105'
+    'version': '1.3.1',
+    'build': '20150312'
 };
 
 
@@ -209,10 +209,12 @@ var triggerEvent = function(eventName, param, obj) {
 
 // 创建名字空间
 namespace('Core', TF);
+namespace('Mentor', TF);
 namespace('Component', TF);
 namespace('Config', TF);
 namespace('Library', TF);
 namespace('Helper', TF);
+
 
 var defaultConfig = {
     baseUrl: '/',
@@ -232,62 +234,34 @@ var mentor = {};
 
 // 页面状态提示相关方法
 mentor.Status = (function(){
-    var isfun = $.isFunction;
-    var cfg = TF.Config;
+    var funcations = [
+        'unsetStatusMsg',
+        'setSuccMsg',
+        'setFailMsg',
+        'setWarningMsg',
+        'setLoadingMsg',
+        'unsetLoadingMsg'
+    ];
 
-    var exports = {
-        unsetStatusMsg: function(appName) {
-            var mt = cfg[appName].mentor;
-
-            if (mt.Status && isfun(mt.Status.unsetStatusMsg)){
-                mt.Status.unsetStatusMsg.apply(mt.Status, [].slice.call(arguments, 1));
-            }
-        },
-
-        setSuccMsg: function(appName){
-            var mt = cfg[appName].mentor;
-
-            if (mt.Status && isfun(mt.Status.setSuccMsg)){
-                mt.Status.setSuccMsg.apply(mt.Status, [].slice.call(arguments, 1));
-            }
-        },
-
-        setFailMsg: function(appName){
-            if (!cfg[appName]) {
+    var func = function(name) {
+        return function(appName) {
+            if (!TF.Config[appName]) {
                 appName = defaultApplicationName;
             }
 
-            var mt = cfg[appName].mentor;
+            var mt = TF.Config[appName].mentor;
 
-            if (mt.Status && isfun(mt.Status.setFailMsg)){
-                mt.Status.setFailMsg.apply(mt.Status, [].slice.call(arguments, 1));
+            if (mt.Status && $.isFunction(mt.Status[name])){
+                mt.Status[name].apply(mt.Status, [].slice.call(arguments, 1));
             }
-        },
-
-        setWarningMsg: function(appName){
-            var mt = cfg[appName].mentor;
-
-            if (mt.Status && isfun(mt.Status.setWarningMsg)){
-                mt.Status.setWarningMsg.apply(mt.Status, [].slice.call(arguments, 1));
-            }
-        },
-
-        setLoadingMsg: function(appName) {
-            var mt = cfg[appName].mentor;
-
-            if (mt.Status && isfun(mt.Status.setLoadingMsg)){
-                mt.Status.setLoadingMsg.apply(mt.Status, [].slice.call(arguments, 1));
-            }
-        },
-
-        unsetLoadingMsg: function(appName) {
-            var mt = cfg[appName].mentor;
-
-            if (mt.Status && isfun(mt.Status.unsetLoadingMsg)){
-                mt.Status.unsetLoadingMsg.apply(mt.Status, [].slice.call(arguments, 1));
-            }
-        }
+        };
     };
+
+    var exports = {};
+
+    $.each(funcations, function(){
+        exports[this] = func(this);
+    });
 
     return exports;
 })();
@@ -354,6 +328,45 @@ mentor.Form = (function() {
 
     return exports;
 })();
+
+
+// 扩展 TF 框架的功能
+TF.Mentor = {
+    _templateRenderBefore: [],
+    _templateRenderAfter: [],
+    _routeBefore: [],
+    _routeAfter: [],
+    _routeFilteringBefore: [],
+    _routeFilteringAfter: [],
+
+    extendComponent: function(options) {
+        var me = this;
+
+        if (!$.isPlainObject(options)) {
+            return;
+        }
+
+        var func = {
+            TemplateRenderBefore: '_templateRenderBefore',
+            TemplateRenderAfter: '_templateRenderAfter',
+            RouteBefore: '_routeBefore',
+            RouteAfter: '_routeAfter',
+            RouteFilteringBefore: '_routeFilteringBefore',
+            RouteFilteringAfter: '_routeFilteringAfter'
+        };
+
+        $.each(func, function(key, value){
+            if ($.isFunction(options[key])) {
+                me[value].push(options[key]);
+                delete options[key];
+            }
+        });
+
+        // 直接注入到组件的 sys 名字空间中
+        mix(componentSys, options);
+    }
+};
+
 
 // Browser JS 的运行环境，浏览器以及版本信息。（Browser 仅基于 userAgent 进行嗅探，存在不严谨的缺陷。）
 // 移动的 useragent 信息参考自 http://mo.wed.ivershuo.com/。
@@ -1027,339 +1040,340 @@ mix(TF.Library.LocationHash.prototype, {
         }).appendTo(document.body)[0];
     }
 });
-    // 组件加载器类
-    TF.Library.ComponentLoader = function(options, componentMgrInstance) {
-        this.options = {
-            name: 'Default',
-            url: '',
-            hide: false,             // 是否以隐藏的方式渲染组件
-            lazyInit: false,         // 延迟初始化
-            lazyRender: false,       // 延迟渲染
-            appendRender: false,     // 是否添加到容器节点
-            replaceRender: false,    // 是否替换容器节点
-            renderTo: '#component',  // 组件的容器
-            applyTo: '',             // 直接把某个 DOM 节点变成组件
-            contentEl: '',           // 从某个 DOM 节点取得组件的内容
-            data: ''                 // URL 参数
-        };
-        mix(this.options, options, true);
 
-        // 判断是加载到全局组件管理器，还是私有组件管理器中
-        this.componentMgrInstance = componentMgrInstance ? componentMgrInstance : TF.Core.ComponentMgr;
-
-        this.initialize();
-
-        return this;
+// 组件加载器类
+TF.Library.ComponentLoader = function(options, componentMgrInstance) {
+    this.options = {
+        name: 'Default',
+        url: '',
+        hide: false,             // 是否以隐藏的方式渲染组件
+        lazyInit: false,         // 延迟初始化
+        lazyRender: false,       // 延迟渲染
+        appendRender: false,     // 是否添加到容器节点
+        replaceRender: false,    // 是否替换容器节点
+        renderTo: '#component',  // 组件的容器
+        applyTo: '',             // 直接把某个 DOM 节点变成组件
+        contentEl: '',           // 从某个 DOM 节点取得组件的内容
+        data: ''                 // URL 参数
     };
-    mix(TF.Library.ComponentLoader.prototype, {
-        initialize: function() {
-            //if ($(this.options.renderTo).length == 0 && $(this.options.applyTo).length == 0) return;
+    mix(this.options, options, true);
 
-            this._instance = null;
-            this._instanced = false;
-            this.fullName = this.options.name;
-            this.appName = TF.Helper.Utility.getApplicationName(this.options.name);
-            this.name = TF.Helper.Utility.getComponentName(this.options.name);
+    // 判断是加载到全局组件管理器，还是私有组件管理器中
+    this.componentMgrInstance = componentMgrInstance ? componentMgrInstance : TF.Core.ComponentMgr;
 
-            // 注册到组件管理器
-            //this.componentMgrInstance.register(this.fullName);
-        },
+    this.initialize();
 
-        on: function(eventName, callback) {
-            return addEvent(this, eventName, callback);
-        },
+    return this;
+};
+mix(TF.Library.ComponentLoader.prototype, {
+    initialize: function() {
+        //if ($(this.options.renderTo).length == 0 && $(this.options.applyTo).length == 0) return;
 
-        load: function() {
-            this._preload();
-        },
+        this._instance = null;
+        this._instanced = false;
+        this.fullName = this.options.name;
+        this.appName = TF.Helper.Utility.getApplicationName(this.options.name);
+        this.name = TF.Helper.Utility.getComponentName(this.options.name);
 
-        _preload: function() {
-            var me = this;
+        // 注册到组件管理器
+        //this.componentMgrInstance.register(this.fullName);
+    },
 
-            // Application Name 不存在则创建
-            TF.Component[this.appName] = TF.Component[this.appName] || {};
+    on: function(eventName, callback) {
+        return addEvent(this, eventName, callback);
+    },
 
-            var isLoad = (typeof TF.Component[this.appName][this.name] !== 'undefined');
-            if (isLoad) {
-                this._createInstance();
-            }
-            else {
-                $.getScript(TF.Helper.Utility.getComponentJsUrl(this.appName, this.name))
-                .done(function(){
-                    if (typeof TF.Component[me.appName][me.name] !== 'undefined') {
-                        // 加载成功
-                        me._createInstance();
-                    }
-                    else {
-                        // 加载失败
-                        // 应该返回错误，或者记录日志
-                        me._failure();
-                    }
-                })
-                .fail(function( jqxhr, settings, exception ){
-                    console && console.error(exception.message);
+    load: function() {
+        this._preload();
+    },
+
+    _preload: function() {
+        var me = this;
+
+        // Application Name 不存在则创建
+        TF.Component[this.appName] = TF.Component[this.appName] || {};
+
+        var isLoad = (typeof TF.Component[this.appName][this.name] !== 'undefined');
+        if (isLoad) {
+            this._createInstance();
+        }
+        else {
+            $.getScript(TF.Helper.Utility.getComponentJsUrl(this.appName, this.name))
+            .done(function(){
+                if (typeof TF.Component[me.appName][me.name] !== 'undefined') {
+                    // 加载成功
+                    me._createInstance();
+                }
+                else {
                     // 加载失败
                     // 应该返回错误，或者记录日志
                     me._failure();
-                });
-            }
-        },
+                }
+            })
+            .fail(function( jqxhr, settings, exception ){
+                console && console.error(exception.message);
+                // 加载失败
+                // 应该返回错误，或者记录日志
+                me._failure();
+            });
+        }
+    },
 
-        // 创建当前内容的名字空间实例
-        _createInstance: function() {
-            try {
-                this._instance = new TF.Component[this.appName][this.name](this.options);
-            }
-            catch(e) {
-            }
+    // 创建当前内容的名字空间实例
+    _createInstance: function() {
+        try {
+            this._instance = new TF.Component[this.appName][this.name](this.options);
+        }
+        catch(e) {
+        }
 
-            if (!this._instance) {
-                this._failure();
-            }
+        if (!this._instance) {
+            this._failure();
+        }
 
-            this._funcs = [];
-            this._loadMentor(proxy(this._initInstance, this));
-        },
+        this._funcs = [];
+        this._loadMentor(proxy(this._initInstance, this));
+    },
 
-        // 组件依赖分析，根据依赖加载相应组件
-        // 返回组件实例
-        _loadMentor: function(callback, fullName, parentClass) {
-            var mentor;
-            var me = this;
-            var appName;
-            var name;
+    // 组件依赖分析，根据依赖加载相应组件
+    // 返回组件实例
+    _loadMentor: function(callback, fullName, parentClass) {
+        var mentor;
+        var me = this;
+        var appName;
+        var name;
 
-            if (fullName) {
-                appName = TF.Helper.Utility.getApplicationName(fullName);
-                name = TF.Helper.Utility.getComponentName(fullName);
+        if (fullName) {
+            appName = TF.Helper.Utility.getApplicationName(fullName);
+            name = TF.Helper.Utility.getComponentName(fullName);
 
-                var isLoad = (typeof TF.Component[appName][name] != 'undefined');
+            var isLoad = (typeof TF.Component[appName][name] != 'undefined');
 
-                if (isLoad) {
-                    // 组件类已加载
-                    mentor = TF.Component[appName][name].prototype.Mentor;
-                    if (mentor && mentor.name) {
-                        me._loadMentor(function(){
-                            me._initMentor(fullName, parentClass, TF.Component[appName][name]);
-                            callback();
-                        }, mentor.name, TF.Component[appName][name]);
-                    }
-                    else {
+            if (isLoad) {
+                // 组件类已加载
+                mentor = TF.Component[appName][name].prototype.Mentor;
+                if (mentor && mentor.name) {
+                    me._loadMentor(function(){
                         me._initMentor(fullName, parentClass, TF.Component[appName][name]);
                         callback();
-                    }
+                    }, mentor.name, TF.Component[appName][name]);
                 }
                 else {
-                    // 组件类未加载
-                    $.getScript(TF.Helper.Utility.getComponentJsUrl(appName, name), function(){
-                        if (typeof TF.Component[appName][name] != 'undefined') {
-                            // 加载成功
-                            mentor = TF.Component[appName][name].prototype.Mentor;
-                            if (mentor && mentor.name) {
-                                me._loadMentor(function(){
-                                    me._initMentor(fullName, parentClass, TF.Component[appName][name]);
-                                    callback();
-                                }, mentor.name, TF.Component[appName][name]);
-                            }
-                            else {
-                                me._initMentor(name, parentClass, TF.Component[appName][name]);
-                                callback();
-                            }
-                        }
-                        else {
-                            // TODO: 要抛一个异常，表示依赖加载失败，或者是触发一个加载失败的事件
-                        }
-                    });
-                }
-
-            }
-            else {
-                if (this._instance.Mentor) {
-                    this._loadMentor(callback, this._instance.Mentor.name);
-                }
-                else {
+                    me._initMentor(fullName, parentClass, TF.Component[appName][name]);
                     callback();
                 }
             }
-        },
+            else {
+                // 组件类未加载
+                $.getScript(TF.Helper.Utility.getComponentJsUrl(appName, name), function(){
+                    if (typeof TF.Component[appName][name] != 'undefined') {
+                        // 加载成功
+                        mentor = TF.Component[appName][name].prototype.Mentor;
+                        if (mentor && mentor.name) {
+                            me._loadMentor(function(){
+                                me._initMentor(fullName, parentClass, TF.Component[appName][name]);
+                                callback();
+                            }, mentor.name, TF.Component[appName][name]);
+                        }
+                        else {
+                            me._initMentor(name, parentClass, TF.Component[appName][name]);
+                            callback();
+                        }
+                    }
+                    else {
+                        // TODO: 要抛一个异常，表示依赖加载失败，或者是触发一个加载失败的事件
+                    }
+                });
+            }
 
-        // 初始化继承的组件
-        _initMentor: function(fullName, componentClass, mentorClass) {
-            var dest;
-            var sourPrototype;
-            var metroPrototype = mentorClass.prototype;
-
-            componentClass = componentClass || this._instance;
-
-            if ($.isFunction(componentClass)) {
-                dest = componentClass.prototype;
-                sourPrototype = componentClass.prototype;
+        }
+        else {
+            if (this._instance.Mentor) {
+                this._loadMentor(callback, this._instance.Mentor.name);
             }
             else {
-                dest = this._instance;
-                sourPrototype = TF.Component[this.appName][this.name].prototype;
+                callback();
             }
+        }
+    },
 
-            // 把父类方法放入子类或当前实例
-            mix(dest, metroPrototype, function(des, src, key){
-                if (key == 'Mentor' || sourPrototype.hasOwnProperty(key)) {
-                    // 如果子类重载了父类的方法，则增加一个 _super 方法到当前实例中
-                    // _super 方法参考了 http://ejohn.org/blog/simple-javascript-inheritance
-                    if ($.isFunction(src) && $.isFunction(des) && /\b_super\b/.test(des)) {
-                        return (function(name, fn){
-                            return function() {
-                                var tmp = this._super;
+    // 初始化继承的组件
+    _initMentor: function(fullName, componentClass, mentorClass) {
+        var dest;
+        var sourPrototype;
+        var metroPrototype = mentorClass.prototype;
 
-                                // Add a new ._super() method that is the same method
-                                // but on the super-class
-                                this._super = metroPrototype[name];
+        componentClass = componentClass || this._instance;
 
-                                // The method only need to be bound temporarily, so we
-                                // remove it when we're done executing
-                                var ret = fn.apply(this, arguments);
-                                this._super = tmp;
+        if ($.isFunction(componentClass)) {
+            dest = componentClass.prototype;
+            sourPrototype = componentClass.prototype;
+        }
+        else {
+            dest = this._instance;
+            sourPrototype = TF.Component[this.appName][this.name].prototype;
+        }
 
-                                return ret;
-                            };
-                        })(key, des);
-                    }
-                    else {
-                        return des;
-                    }
+        // 把父类方法放入子类或当前实例
+        mix(dest, metroPrototype, function(des, src, key){
+            if (key == 'Mentor' || sourPrototype.hasOwnProperty(key)) {
+                // 如果子类重载了父类的方法，则增加一个 _super 方法到当前实例中
+                // _super 方法参考了 http://ejohn.org/blog/simple-javascript-inheritance
+                if ($.isFunction(src) && $.isFunction(des) && /\b_super\b/.test(des)) {
+                    return (function(name, fn){
+                        return function() {
+                            var tmp = this._super;
+
+                            // Add a new ._super() method that is the same method
+                            // but on the super-class
+                            this._super = metroPrototype[name];
+
+                            // The method only need to be bound temporarily, so we
+                            // remove it when we're done executing
+                            var ret = fn.apply(this, arguments);
+                            this._super = tmp;
+
+                            return ret;
+                        };
+                    })(key, des);
                 }
                 else {
-                    return src;
+                    return des;
                 }
-            });
+            }
+            else {
+                return src;
+            }
+        });
 
-            if ($.isFunction(componentClass)) {
-                // 设置是否使用借用组件的视图
-                if (dest.Mentor.useMentorView) {
-                    dest.Mentor.useMentorView = false;
-                    dest.Mentor.useView = fullName;
-                }
-                else if (dest.Mentor.useView) {
-                    dest.Mentor.useView = metroPrototype.Mentor.useView;
-                }
+        if ($.isFunction(componentClass)) {
+            // 设置是否使用借用组件的视图
+            if (dest.Mentor.useMentorView) {
+                dest.Mentor.useMentorView = false;
+                dest.Mentor.useView = fullName;
+            }
+            else if (dest.Mentor.useView) {
+                dest.Mentor.useView = metroPrototype.Mentor.useView;
+            }
 
-                if (metroPrototype.Mentor) {
-                    mix(dest.Mentor.viewData, metroPrototype.Mentor.viewData, true);
+            if (metroPrototype.Mentor) {
+                mix(dest.Mentor.viewData, metroPrototype.Mentor.viewData, true);
 
-                    if (metroPrototype.Mentor.__path) {
-                        dest.Mentor.__path = metroPrototype.Mentor.__path;
-                    }
-                    else {
-                        dest.Mentor.__path = [];
-                    }
+                if (metroPrototype.Mentor.__path) {
+                    dest.Mentor.__path = metroPrototype.Mentor.__path;
                 }
                 else {
                     dest.Mentor.__path = [];
                 }
-
-                dest.Mentor.__path.push(fullName);
             }
             else {
+                dest.Mentor.__path = [];
+            }
 
-                // 设置是否使用借用组件的视图
-                if (this._instance.Mentor.useMentorView) {
-                    if (metroPrototype.Mentor && metroPrototype.Mentor.useView) {
-                        this._instance.sys.viewName = metroPrototype.Mentor.useView;
-                    }
-                    else {
-                        this._instance.sys.viewName = fullName;
-                    }
-                }
-                else if (this._instance.Mentor.useView) {
-                    this._instance.sys.viewName = this._instance.Mentor.useView;
-                }
+            dest.Mentor.__path.push(fullName);
+        }
+        else {
 
-                if (metroPrototype.Mentor && metroPrototype.Mentor.__path) {
-                    this._instance.Mentor.__path = metroPrototype.Mentor.__path;
-                    this._instance.Mentor.__path.push(fullName);
+            // 设置是否使用借用组件的视图
+            if (this._instance.Mentor.useMentorView) {
+                if (metroPrototype.Mentor && metroPrototype.Mentor.useView) {
+                    this._instance.sys.viewName = metroPrototype.Mentor.useView;
                 }
                 else {
-                    this._instance.Mentor.__path = [fullName];
+                    this._instance.sys.viewName = fullName;
                 }
-
-                this._instance.sys.options.data = this._instance.sys.options.data || {};
-                mix(this._instance.sys.options.data, this._instance.Mentor.viewData, true);
+            }
+            else if (this._instance.Mentor.useView) {
+                this._instance.sys.viewName = this._instance.Mentor.useView;
             }
 
-        },
-
-        // 初始化组件实例
-        _initInstance: function(mentorClass) {
-            // 组件实例化正确才加载内容
-            this._instanced = true;
-
-            // 把加载器的配置传递到组件实例的sys空间里
-            mix(this._instance.sys.options, this.options, function(des, src, key){
-                if (key == 'data') {
-                    if ($.isPlainObject(src)) {
-                        if (!des) {
-                            des = {};
-                        }
-                        return mix(des, src, true);
-                    }
-                    else if ($.type(src) == 'string') {
-                        if (!des) {
-                            des = {};
-                        }
-                        return mix(des, unserialize(src), true);
-                    }
-                    else {
-                        return des;
-                    }
-                }
-                else {
-                    return src;
-                }
-            });
-
-            this._instance.sys.hidden = this.options.hide;
-            this._instance.sys.fullName = this.fullName;
-            this._instance.sys.appName = this.appName;
-            this._instance.sys.name = this.name;
-            this._instance.sys.index = this.options.__index || 0;
-            this._instance.sys.contentElement = this.options.__element;
-            // 只保存一份 fragment 就可以了
-            delete this._instance.options.__element;
-            delete this._instance.sys.options.__element;
-            // 组件需要知道自己的父级组件管理器是谁
-            this._instance.sys.parentComponentMgr = this.componentMgrInstance;
-
-            // 实例准备就绪
-            this._instance.InstanceReady(this);
-
-            //this.componentMgrInstance.loaded(this.fullName, this._instance);
-
-            var obj = {instance: this._instance, fullName: this.fullName, name: this.name, appName: this.appName};
-
-            triggerEvent('instanced', obj, this);
-
-            // 看是否是延迟渲染
-            if (!this.options.lazyRender) {
-                this._instance.sys.render();
+            if (metroPrototype.Mentor && metroPrototype.Mentor.__path) {
+                this._instance.Mentor.__path = metroPrototype.Mentor.__path;
+                this._instance.Mentor.__path.push(fullName);
+            }
+            else {
+                this._instance.Mentor.__path = [fullName];
             }
 
-            triggerEvent('complete', obj, this);
-        },
-
-        _failure: function() {
-            triggerEvent('failure', {instance: null, fullName: this.fullName, name: this.name, appName: this.appName}, this);
-        },
-
-        getInstance: function() {
-            return this._instance;
-        },
-
-        cancel: function() {
-            if (this._instance) {
-                this._instance.sys.cancelRender();
-            }
+            this._instance.sys.options.data = this._instance.sys.options.data || {};
+            mix(this._instance.sys.options.data, this._instance.Mentor.viewData, true);
         }
 
-    });
+    },
+
+    // 初始化组件实例
+    _initInstance: function(mentorClass) {
+        // 组件实例化正确才加载内容
+        this._instanced = true;
+
+        // 把加载器的配置传递到组件实例的sys空间里
+        mix(this._instance.sys.options, this.options, function(des, src, key){
+            if (key == 'data') {
+                if ($.isPlainObject(src)) {
+                    if (!des) {
+                        des = {};
+                    }
+                    return mix(des, src, true);
+                }
+                else if ($.type(src) == 'string') {
+                    if (!des) {
+                        des = {};
+                    }
+                    return mix(des, unserialize(src), true);
+                }
+                else {
+                    return des;
+                }
+            }
+            else {
+                return src;
+            }
+        });
+
+        this._instance.sys.hidden = this.options.hide;
+        this._instance.sys.fullName = this.fullName;
+        this._instance.sys.appName = this.appName;
+        this._instance.sys.name = this.name;
+        this._instance.sys.index = this.options.__index || 0;
+        this._instance.sys.contentElement = this.options.__element;
+        // 只保存一份 fragment 就可以了
+        delete this._instance.options.__element;
+        delete this._instance.sys.options.__element;
+        // 组件需要知道自己的父级组件管理器是谁
+        this._instance.sys.parentComponentMgr = this.componentMgrInstance;
+
+        // 实例准备就绪
+        this._instance.InstanceReady(this);
+
+        //this.componentMgrInstance.loaded(this.fullName, this._instance);
+
+        var obj = {instance: this._instance, fullName: this.fullName, name: this.name, appName: this.appName};
+
+        triggerEvent('instanced', obj, this);
+
+        // 看是否是延迟渲染
+        if (!this.options.lazyRender) {
+            this._instance.sys.render();
+        }
+
+        triggerEvent('complete', obj, this);
+    },
+
+    _failure: function() {
+        triggerEvent('failure', {instance: null, fullName: this.fullName, name: this.name, appName: this.appName}, this);
+    },
+
+    getInstance: function() {
+        return this._instance;
+    },
+
+    cancel: function() {
+        if (this._instance) {
+            this._instance.sys.cancelRender();
+        }
+    }
+
+});
 
 
 // 组件系统内部方法
@@ -1462,87 +1476,34 @@ var componentSys = {
 
     // 系统路由处理函数
     route: function(args) {
-        var notRefresh = false;
-
-//            if (JSON.stringify(this.lastArgs) !== JSON.stringify(args)) {
-//                this.lastArgs = args;
-//                notRefresh = false;
-//            }
+        var me = this;
 
         // 如果现在路由到其他组件了，则不显示组件
         if (TF.Helper.Utility.getFullComponentName(TF.Core.Router.parseUri().name) == TF.Helper.Utility.getFullComponentName(this.fullName)) {
             this.postMessage('component-only-show');
         }
 
-        if (this.layoutType == 'normal') {
-            if (args) {
-                // 传递页数给 fn 函数
-                this.layoutData.page = this.getUriPage(args);
-            }
-            else {
-                this.layoutData.page = 0;
-            }
+        $.each(TF.Mentor._routeBefore, function(){
+            args = this.call(me, args);
+        });
 
-            this.renderNormalLayout(false, null, notRefresh);
-        }
-        else if (this.layoutType == 'tab') {
-            if (args) {
-                var index = this.layoutData.tabs.get(this.getUriTab(args)) || 0;
-
-                this.layoutData.items[index].page = this.getUriPage(args);
-
-                this.layoutData.tab.switchTo(index);
-            }
-            else {
-                this.layoutData.items[0].page = 0;
-                this.layoutData.tab.switchTo(0);
-            }
-
-            this.renderTabLayout(false, null, notRefresh);
-        }
-        else {
-            // TODO:
-        }
+        $.each(TF.Mentor._routeAfter, function(){
+            args = this.call(me, args);
+        });
     },
 
     _filterRouterArgs: function(args) {
-        var pager;
+        var me = this;
 
-        if (this.layoutType == 'normal') {
-            // 取最后一个参数，测试是否为页数
-            pager = args[args.length - 1] || '';
-            if ((/p\d+/).test(pager)) {
-                return args.slice(0, -1);
-            }
-            else {
-                return args.slice(0);
-            }
-        }
-        else if (this.layoutType == 'tab') {
-            var newArgs;
+        $.each(TF.Mentor._routeFilteringBefore, function(){
+            args = this.call(me, args);
+        });
 
-            // 取最后一个参数，测试是否为页数
-            pager = args[args.length - 1] || '';
-            if ((/p\d+/).test(pager)) {
-                newArgs = args.slice(0, -1);
-            }
-            else {
-                newArgs = args.slice(0);
-            }
+        $.each(TF.Mentor._routeFilteringAfter, function(){
+            args = this.call(me, args);
+        });
 
-            // 取第一个参数，测试是否为tab名
-            var tab = newArgs[0] || '';
-            if ((/tab-.+/).test(tab)) {
-                return newArgs.slice(1);
-            }
-            else {
-                return newArgs.slice(0);
-            }
-        }
-        else {
-            return args;
-        }
-
+        return args;
     },
 
     // 渲染组件
@@ -2193,52 +2154,6 @@ var componentSys = {
         }, 200);
     },
 
-    // 创建组件内部路由规则
-    createRouter: function(routes, fn, scope) {
-        if (routes) {
-            var routerItems = routes || [];
-            var routerFn = fn || function(){};
-            var routerScope = scope || this.instance;
-
-            var func = function(uri) {
-                var reg, isMatch = false;
-                $.each(routerItems, function(index, item) {
-                    $.each(item, function(key, value){
-                        key = key.replace(/:num/gi, '[0-9]+');
-                        key = key.replace(/:any/gi, '.*');
-
-                        reg = new RegExp('^' + key + '$');
-                        if (uri.match(reg)) {
-                            if (value.indexOf('$') >= 0 && key.indexOf('(') >= 0) {
-                                value = uri.replace(reg, value);
-                            }
-                            isMatch = true;
-                            routerFn.apply(routerScope, [value, index, item]);
-                        }
-                    });
-
-                    if (isMatch) {
-                        return false;
-                    }
-                });
-
-                if (!isMatch) {
-                    routerFn.apply(routerScope, [uri, -1, null]);
-                }
-            };
-
-            //[{'key':'inbox/(:any)/(:any)', 'value': 'inbox/$2'}, ]
-
-            TF.Core.Application.subscribe('GlobalRoute', function(uri) {
-                func(uri);
-            });
-
-            // 一般这里会错过首次的全局路由事件，所以要手动执行一次
-            var uriObject = TF.Core.Router.parseUri();
-            func(uriObject.uri);
-        }
-    },
-
     find: function(selector) {
         if (this.topElement) {
             return selector ? this.topElement.find(selector) : this.topElement;
@@ -2501,43 +2416,23 @@ var componentSys = {
 
         name = $.makeArray(name);
 
-        if (args && args.data) {
-            args.old_data = args.data;
-        }
+        args.callback = function(result) {
+            $.each(TF.Mentor._templateRenderAfter, function(){
+                this.call(me, name, args);
+            });
 
-        // 自动绑定到 this
-        if (args.fn) {
-            args.old_fn = args.fn;
-            args.fn = null;
-            args.fn = function(result) {
-                me._pageInitialize(name, args);
-                args.old_fn.call(me.instance, result);
-                if (args.loadingMsg !== false) {
-                    me.unsetLoadingMsg();
-                }
-            };
-        }
-        else {
-            args.fn = function(result) {
-                me._pageInitialize(name, args);
-                if (args.loadingMsg !== false) {
-                    me.unsetLoadingMsg();
-                }
-            };
-        }
+            if ($.isFunction(args.fn)) {
+                args.fn.call(me.instance, result);
+            }
 
-        if (args.page) {
-            args.pageData = 'component_page=' + args.page;
-        }
-        if (args.pageData) {
-            if ($.isPlainObject(args.pageData)) {
-                args.pageData = $.param(args.pageData);
+            if (args.loadingMsg !== false) {
+                me.unsetLoadingMsg();
             }
-            if ($.isPlainObject(args.old_data)) {
-                args.old_data = $.param(args.old_data);
-            }
-            args.data = args.old_data ? (args.old_data + '&' + args.pageData) : args.pageData;
-        }
+        };
+
+        $.each(TF.Mentor._templateRenderBefore, function(){
+            this.call(me, name, args);
+        });
 
         var template = [], target = [], templateName = [], targetName = [];
 
@@ -2577,7 +2472,7 @@ var componentSys = {
         });
 
         mix(args, {
-            'errorFunc': proxy(function(resultData){
+            errorFunc: proxy(function(resultData){
                 if (args.loadingMsg !== false) {
                     this.sys.unsetLoadingMsg();
                 }
@@ -2678,13 +2573,13 @@ var componentSys = {
                         }
                     });
 
-                    if (typeof(args) != 'undefined' && $.isFunction(args.fn)) {
-                        args.fn(result);
+                    if (typeof(args) != 'undefined') {
+                        args.callback(result);
                     }
                 }
                 else {
                     // 执行失败
-                    if (typeof(args) != 'undefined' && $.isFunction(args.errorFunc)) {
+                    if (typeof(args) != 'undefined') {
                         args.errorFunc(result);
                     }
                     else {
@@ -2723,75 +2618,6 @@ var componentSys = {
         currentRequester = $.ajax(ajaxOptions);
 
         this.templateRequester.set(name.join(), currentRequester);
-    },
-
-    // 默认的翻页功能初始化函数
-    _pageInitialize: function(name, args) {
-        var target;
-        var me = this;
-
-        name = $.makeArray(name);
-
-        $.each(name, function(index, item){
-            // 根据不同情况取 Target 名
-            if ($.type(item) == 'string') {
-                target = item;
-            }
-            else if ($.isPlainObject(item)) {
-                target = item.target;
-            }
-            me.find('.TFTarget-' + target + ' .ComponentPager').delegate('a', 'click', function(e){
-                var page;
-
-                e.stopPropagation();
-                e.preventDefault();
-
-                //me.setLoadingMsg();
-
-                args.fn = null;
-                args.fn = args.old_fn ? args.old_fn : null;
-                args.data = args.old_data ? args.old_data : null;
-                page = $(this).data('page');
-
-                me._pageHandler(name[index], page, args, index);
-            });
-        });
-    },
-
-    // 默认的翻页处理器
-    _pageHandler: function(name, page, args, index) {
-        // 添加模板名、当前页等参数
-        if ($.type(name) == 'string') {
-            args.pageData = 'component_template=' + name;
-        }
-        else if ($.isPlainObject(name)) {
-            args.pageData = 'component_template=' + name.template + '&component_target=' + name.target;
-        }
-        args.pageData += '&component_page=' + page;
-        args.page = page;
-        this.renderTemplate(name, args);
-
-        // 设置当前标签的当前页数
-        if (this.layoutType == 'normal') {
-            this.layoutData.page = page;
-        }
-        else if (this.layoutType == 'tab') {
-            this.layoutData.items[this.layoutData.tabs.get(name)].page = page;
-        }
-
-        // 处理前进后退
-        if (this.layoutType) {
-            var uri = TF.Core.Router.parseUri();
-            var values = uri.params;
-            if (/p\d+/.test(values[values.length - 1])) {
-                values[values.length - 1] = 'p' + page;
-            }
-            else {
-                values[values.length] = 'p' + page;
-            }
-
-            this.setRouterArgs(values, uri.name);
-        }
     },
 
     // 显示组件
@@ -2895,123 +2721,6 @@ var componentSys = {
         }
     },
 
-    // 创建常规布局，常规布局包括的能力是自动分页
-    createNormalLayout: function(data) {
-        //[{'name':'模板名', 'fn': '回调函数', 'page': '当前页数'}, ]
-        if (data) {
-            this.layoutType = 'normal';
-            this.layoutData = data;
-        }
-    },
-
-    // 显示常规布局内容
-    renderNormalLayout: function(isSetRouter, additional, notRefresh) {
-        if (isSetRouter) {
-            var args = $.makeArray(additional || []);
-            if (this.layoutData.page > 0) {
-                args.push('p' + this.layoutData.page);
-            }
-            this.setRouterArgs(args);
-        }
-
-        if (!notRefresh || this.find('.TFTarget-' + this.layoutData.name).children().length == 0) {
-            this.layoutData.fn.call(this.instance, this.layoutData.page);
-        }
-    },
-
-    resetNormalLayoutPage: function() {
-        this.layoutData.page = 0;
-    },
-
-    setNormalLayoutPage: function(page) {
-        this.layoutData.page = page || 0;
-    },
-
-    createTabLayout: function(data, initPanel, cls, options) {
-        //[{'name':'mime', 'fn': '', 'page': '0'}, ]
-        var me = this;
-
-        if (!data) {
-            return;
-        }
-
-        this.layoutType = 'tab';
-        this.layoutData = {
-            tabs: new TF.Library.Hash(),
-            items: data
-        };
-
-        $.each(data, function(index, item){
-            me.layoutData.tabs.set(item.name, index);
-        });
-
-        this.layoutData.tab = new QW.TabView(this.find(cls || '')[0], options || {
-            tabSelector: '.le-tabs li',
-            viewSelector: '.views .view-item',
-            selectedClass: 'active',
-            selectedViewClass: 'active'
-        });
-        // 重写 switchToItem 方法，以实现控制tab切换
-        this.layoutData.tab.switchToItem = function(itemObj) {
-            var index = $.inArray(itemObj, this.items);
-            var lastIndex = this.selectedIndex;
-
-            this.switchTo(index);
-
-            if (lastIndex != index) {
-                me.renderTabLayout(true, TF.Core.Router.parseUri().params, true);
-            }
-        };
-
-        if (initPanel) {
-            this.layoutData.tab.switchTo(initPanel);
-        }
-    },
-
-    // 显示 Tab 布局内容
-    renderTabLayout: function(isSetRouter, additional, notRefresh) {
-        var index = this.layoutData.tab.selectedIndex;
-
-        if (isSetRouter) {
-            var values = ['tab-' + this.layoutData.items[index].name];
-
-            var args = $.makeArray(additional || []);//TF.Core.Router.parseUri().params;
-            if (/p\d+/.test(args[args.length - 1])) {
-                args = args.slice(0, -1);
-            }
-            if (/tab-.+/.test(args[0])) {
-                args = args.slice(1);
-            }
-
-            values.push(args);
-            //values.push(additional || []);
-
-            if (this.layoutData.items[index].page > 0) {
-                values.push('p' + this.layoutData.items[index].page);
-            }
-
-            this.setRouterArgs(values.expand(true));
-        }
-
-        if (!notRefresh || $(this.layoutData.tab.views[index]).find('.TFTarget-' + this.layoutData.items[index].name).children().length == 0) {
-            this.layoutData.items[index].fn && this.layoutData.items[index].fn.call(this.instance, this.layoutData.items[index].page);
-        }
-    },
-
-    resetTabLayoutPage: function() {
-        var index = this.layoutData.tab.selectedIndex;
-        this.layoutData.items[index].page = 0;
-    },
-
-    getCurrentTab: function() {
-        var index = this.layoutData.tab.selectedIndex;
-
-        if (index < 0) {
-            return $();
-        }
-        return $(this.layoutData.tab.views[index]);
-    },
-
     // 用于设置前进后退的 URI
     // args 是参数数组
     // name 是组件名，默认不写则是当前组件
@@ -3030,47 +2739,9 @@ var componentSys = {
         // 组成一个可用的URI
         //appName:name/params
 
-        //var old = this._getHistoryMgrValues();
-        //if (old[0] == name[0] && old[1] == name[1]) return;
         TF.Core.Router.setUri(uri.join('/'));
-        //this.options.HistoryMgr.setValues(name);
-        //Iqwer.Class.Core.Instance.publish('全局历史路由', [name]);
 
         TF.Core.Application.publish('GlobalRoute', [uri.join('/'), [this.name, args]]);
-    },
-
-    // 取URI参数中的页数，args 为数组
-    getUriPage: function(args) {
-        if (!args) {
-            return 0;
-        }
-
-        args = $.makeArray(args);
-        var pager = args[args.length - 1] || '';
-        if ((/p\d+/).test(pager)) {
-            return pager.slice(1);
-        }
-        else {
-            return 0;
-        }
-    },
-
-    // 取URI参数中的tab名，args 为数组
-    getUriTab: function(args) {
-        var defaultName = this.layoutData.items[0].name;
-
-        if (!args) {
-            return defaultName;
-        }
-
-        args = $.makeArray(args);
-        var tab = args[0] || '';
-        if ((/tab-.+/).test(tab)) {
-            return tab.slice(4);
-        }
-        else {
-            return defaultName;
-        }
     },
 
     // 验证组件表单
@@ -3084,8 +2755,9 @@ var componentSys = {
             return true;
         }
     }
-
 };
+
+
 TF.Component.Default = function(options) {
     this.options = {};
     mix(this.options, options, true);
