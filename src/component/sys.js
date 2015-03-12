@@ -99,87 +99,34 @@ var componentSys = {
 
     // 系统路由处理函数
     route: function(args) {
-        var notRefresh = false;
-
-//            if (JSON.stringify(this.lastArgs) !== JSON.stringify(args)) {
-//                this.lastArgs = args;
-//                notRefresh = false;
-//            }
+        var me = this;
 
         // 如果现在路由到其他组件了，则不显示组件
         if (TF.Helper.Utility.getFullComponentName(TF.Core.Router.parseUri().name) == TF.Helper.Utility.getFullComponentName(this.fullName)) {
             this.postMessage('component-only-show');
         }
 
-        if (this.layoutType == 'normal') {
-            if (args) {
-                // 传递页数给 fn 函数
-                this.layoutData.page = this.getUriPage(args);
-            }
-            else {
-                this.layoutData.page = 0;
-            }
+        $.each(TF.Mentor._routeBefore, function(){
+            args = this.call(me, args);
+        });
 
-            this.renderNormalLayout(false, null, notRefresh);
-        }
-        else if (this.layoutType == 'tab') {
-            if (args) {
-                var index = this.layoutData.tabs.get(this.getUriTab(args)) || 0;
-
-                this.layoutData.items[index].page = this.getUriPage(args);
-
-                this.layoutData.tab.switchTo(index);
-            }
-            else {
-                this.layoutData.items[0].page = 0;
-                this.layoutData.tab.switchTo(0);
-            }
-
-            this.renderTabLayout(false, null, notRefresh);
-        }
-        else {
-            // TODO:
-        }
+        $.each(TF.Mentor._routeAfter, function(){
+            args = this.call(me, args);
+        });
     },
 
     _filterRouterArgs: function(args) {
-        var pager;
+        var me = this;
 
-        if (this.layoutType == 'normal') {
-            // 取最后一个参数，测试是否为页数
-            pager = args[args.length - 1] || '';
-            if ((/p\d+/).test(pager)) {
-                return args.slice(0, -1);
-            }
-            else {
-                return args.slice(0);
-            }
-        }
-        else if (this.layoutType == 'tab') {
-            var newArgs;
+        $.each(TF.Mentor._routeFilteringBefore, function(){
+            args = this.call(me, args);
+        });
 
-            // 取最后一个参数，测试是否为页数
-            pager = args[args.length - 1] || '';
-            if ((/p\d+/).test(pager)) {
-                newArgs = args.slice(0, -1);
-            }
-            else {
-                newArgs = args.slice(0);
-            }
+        $.each(TF.Mentor._routeFilteringAfter, function(){
+            args = this.call(me, args);
+        });
 
-            // 取第一个参数，测试是否为tab名
-            var tab = newArgs[0] || '';
-            if ((/tab-.+/).test(tab)) {
-                return newArgs.slice(1);
-            }
-            else {
-                return newArgs.slice(0);
-            }
-        }
-        else {
-            return args;
-        }
-
+        return args;
     },
 
     // 渲染组件
@@ -830,52 +777,6 @@ var componentSys = {
         }, 200);
     },
 
-    // 创建组件内部路由规则
-    createRouter: function(routes, fn, scope) {
-        if (routes) {
-            var routerItems = routes || [];
-            var routerFn = fn || function(){};
-            var routerScope = scope || this.instance;
-
-            var func = function(uri) {
-                var reg, isMatch = false;
-                $.each(routerItems, function(index, item) {
-                    $.each(item, function(key, value){
-                        key = key.replace(/:num/gi, '[0-9]+');
-                        key = key.replace(/:any/gi, '.*');
-
-                        reg = new RegExp('^' + key + '$');
-                        if (uri.match(reg)) {
-                            if (value.indexOf('$') >= 0 && key.indexOf('(') >= 0) {
-                                value = uri.replace(reg, value);
-                            }
-                            isMatch = true;
-                            routerFn.apply(routerScope, [value, index, item]);
-                        }
-                    });
-
-                    if (isMatch) {
-                        return false;
-                    }
-                });
-
-                if (!isMatch) {
-                    routerFn.apply(routerScope, [uri, -1, null]);
-                }
-            };
-
-            //[{'key':'inbox/(:any)/(:any)', 'value': 'inbox/$2'}, ]
-
-            TF.Core.Application.subscribe('GlobalRoute', function(uri) {
-                func(uri);
-            });
-
-            // 一般这里会错过首次的全局路由事件，所以要手动执行一次
-            var uriObject = TF.Core.Router.parseUri();
-            func(uriObject.uri);
-        }
-    },
-
     find: function(selector) {
         if (this.topElement) {
             return selector ? this.topElement.find(selector) : this.topElement;
@@ -1138,43 +1039,23 @@ var componentSys = {
 
         name = $.makeArray(name);
 
-        if (args && args.data) {
-            args.old_data = args.data;
-        }
+        args.callback = function(result) {
+            $.each(TF.Mentor._templateRenderAfter, function(){
+                this.call(me, name, args);
+            });
 
-        // 自动绑定到 this
-        if (args.fn) {
-            args.old_fn = args.fn;
-            args.fn = null;
-            args.fn = function(result) {
-                me._pageInitialize(name, args);
-                args.old_fn.call(me.instance, result);
-                if (args.loadingMsg !== false) {
-                    me.unsetLoadingMsg();
-                }
-            };
-        }
-        else {
-            args.fn = function(result) {
-                me._pageInitialize(name, args);
-                if (args.loadingMsg !== false) {
-                    me.unsetLoadingMsg();
-                }
-            };
-        }
+            if ($.isFunction(args.fn)) {
+                args.fn.call(me.instance, result);
+            }
 
-        if (args.page) {
-            args.pageData = 'component_page=' + args.page;
-        }
-        if (args.pageData) {
-            if ($.isPlainObject(args.pageData)) {
-                args.pageData = $.param(args.pageData);
+            if (args.loadingMsg !== false) {
+                me.unsetLoadingMsg();
             }
-            if ($.isPlainObject(args.old_data)) {
-                args.old_data = $.param(args.old_data);
-            }
-            args.data = args.old_data ? (args.old_data + '&' + args.pageData) : args.pageData;
-        }
+        };
+
+        $.each(TF.Mentor._templateRenderBefore, function(){
+            this.call(me, name, args);
+        });
 
         var template = [], target = [], templateName = [], targetName = [];
 
@@ -1214,7 +1095,7 @@ var componentSys = {
         });
 
         mix(args, {
-            'errorFunc': proxy(function(resultData){
+            errorFunc: proxy(function(resultData){
                 if (args.loadingMsg !== false) {
                     this.sys.unsetLoadingMsg();
                 }
@@ -1315,13 +1196,13 @@ var componentSys = {
                         }
                     });
 
-                    if (typeof(args) != 'undefined' && $.isFunction(args.fn)) {
-                        args.fn(result);
+                    if (typeof(args) != 'undefined') {
+                        args.callback(result);
                     }
                 }
                 else {
                     // 执行失败
-                    if (typeof(args) != 'undefined' && $.isFunction(args.errorFunc)) {
+                    if (typeof(args) != 'undefined') {
                         args.errorFunc(result);
                     }
                     else {
@@ -1360,75 +1241,6 @@ var componentSys = {
         currentRequester = $.ajax(ajaxOptions);
 
         this.templateRequester.set(name.join(), currentRequester);
-    },
-
-    // 默认的翻页功能初始化函数
-    _pageInitialize: function(name, args) {
-        var target;
-        var me = this;
-
-        name = $.makeArray(name);
-
-        $.each(name, function(index, item){
-            // 根据不同情况取 Target 名
-            if ($.type(item) == 'string') {
-                target = item;
-            }
-            else if ($.isPlainObject(item)) {
-                target = item.target;
-            }
-            me.find('.TFTarget-' + target + ' .ComponentPager').delegate('a', 'click', function(e){
-                var page;
-
-                e.stopPropagation();
-                e.preventDefault();
-
-                //me.setLoadingMsg();
-
-                args.fn = null;
-                args.fn = args.old_fn ? args.old_fn : null;
-                args.data = args.old_data ? args.old_data : null;
-                page = $(this).data('page');
-
-                me._pageHandler(name[index], page, args, index);
-            });
-        });
-    },
-
-    // 默认的翻页处理器
-    _pageHandler: function(name, page, args, index) {
-        // 添加模板名、当前页等参数
-        if ($.type(name) == 'string') {
-            args.pageData = 'component_template=' + name;
-        }
-        else if ($.isPlainObject(name)) {
-            args.pageData = 'component_template=' + name.template + '&component_target=' + name.target;
-        }
-        args.pageData += '&component_page=' + page;
-        args.page = page;
-        this.renderTemplate(name, args);
-
-        // 设置当前标签的当前页数
-        if (this.layoutType == 'normal') {
-            this.layoutData.page = page;
-        }
-        else if (this.layoutType == 'tab') {
-            this.layoutData.items[this.layoutData.tabs.get(name)].page = page;
-        }
-
-        // 处理前进后退
-        if (this.layoutType) {
-            var uri = TF.Core.Router.parseUri();
-            var values = uri.params;
-            if (/p\d+/.test(values[values.length - 1])) {
-                values[values.length - 1] = 'p' + page;
-            }
-            else {
-                values[values.length] = 'p' + page;
-            }
-
-            this.setRouterArgs(values, uri.name);
-        }
     },
 
     // 显示组件
@@ -1532,123 +1344,6 @@ var componentSys = {
         }
     },
 
-    // 创建常规布局，常规布局包括的能力是自动分页
-    createNormalLayout: function(data) {
-        //[{'name':'模板名', 'fn': '回调函数', 'page': '当前页数'}, ]
-        if (data) {
-            this.layoutType = 'normal';
-            this.layoutData = data;
-        }
-    },
-
-    // 显示常规布局内容
-    renderNormalLayout: function(isSetRouter, additional, notRefresh) {
-        if (isSetRouter) {
-            var args = $.makeArray(additional || []);
-            if (this.layoutData.page > 0) {
-                args.push('p' + this.layoutData.page);
-            }
-            this.setRouterArgs(args);
-        }
-
-        if (!notRefresh || this.find('.TFTarget-' + this.layoutData.name).children().length == 0) {
-            this.layoutData.fn.call(this.instance, this.layoutData.page);
-        }
-    },
-
-    resetNormalLayoutPage: function() {
-        this.layoutData.page = 0;
-    },
-
-    setNormalLayoutPage: function(page) {
-        this.layoutData.page = page || 0;
-    },
-
-    createTabLayout: function(data, initPanel, cls, options) {
-        //[{'name':'mime', 'fn': '', 'page': '0'}, ]
-        var me = this;
-
-        if (!data) {
-            return;
-        }
-
-        this.layoutType = 'tab';
-        this.layoutData = {
-            tabs: new TF.Library.Hash(),
-            items: data
-        };
-
-        $.each(data, function(index, item){
-            me.layoutData.tabs.set(item.name, index);
-        });
-
-        this.layoutData.tab = new QW.TabView(this.find(cls || '')[0], options || {
-            tabSelector: '.le-tabs li',
-            viewSelector: '.views .view-item',
-            selectedClass: 'active',
-            selectedViewClass: 'active'
-        });
-        // 重写 switchToItem 方法，以实现控制tab切换
-        this.layoutData.tab.switchToItem = function(itemObj) {
-            var index = $.inArray(itemObj, this.items);
-            var lastIndex = this.selectedIndex;
-
-            this.switchTo(index);
-
-            if (lastIndex != index) {
-                me.renderTabLayout(true, TF.Core.Router.parseUri().params, true);
-            }
-        };
-
-        if (initPanel) {
-            this.layoutData.tab.switchTo(initPanel);
-        }
-    },
-
-    // 显示 Tab 布局内容
-    renderTabLayout: function(isSetRouter, additional, notRefresh) {
-        var index = this.layoutData.tab.selectedIndex;
-
-        if (isSetRouter) {
-            var values = ['tab-' + this.layoutData.items[index].name];
-
-            var args = $.makeArray(additional || []);//TF.Core.Router.parseUri().params;
-            if (/p\d+/.test(args[args.length - 1])) {
-                args = args.slice(0, -1);
-            }
-            if (/tab-.+/.test(args[0])) {
-                args = args.slice(1);
-            }
-
-            values.push(args);
-            //values.push(additional || []);
-
-            if (this.layoutData.items[index].page > 0) {
-                values.push('p' + this.layoutData.items[index].page);
-            }
-
-            this.setRouterArgs(values.expand(true));
-        }
-
-        if (!notRefresh || $(this.layoutData.tab.views[index]).find('.TFTarget-' + this.layoutData.items[index].name).children().length == 0) {
-            this.layoutData.items[index].fn && this.layoutData.items[index].fn.call(this.instance, this.layoutData.items[index].page);
-        }
-    },
-
-    resetTabLayoutPage: function() {
-        var index = this.layoutData.tab.selectedIndex;
-        this.layoutData.items[index].page = 0;
-    },
-
-    getCurrentTab: function() {
-        var index = this.layoutData.tab.selectedIndex;
-
-        if (index < 0) {
-            return $();
-        }
-        return $(this.layoutData.tab.views[index]);
-    },
-
     // 用于设置前进后退的 URI
     // args 是参数数组
     // name 是组件名，默认不写则是当前组件
@@ -1667,47 +1362,9 @@ var componentSys = {
         // 组成一个可用的URI
         //appName:name/params
 
-        //var old = this._getHistoryMgrValues();
-        //if (old[0] == name[0] && old[1] == name[1]) return;
         TF.Core.Router.setUri(uri.join('/'));
-        //this.options.HistoryMgr.setValues(name);
-        //Iqwer.Class.Core.Instance.publish('全局历史路由', [name]);
 
         TF.Core.Application.publish('GlobalRoute', [uri.join('/'), [this.name, args]]);
-    },
-
-    // 取URI参数中的页数，args 为数组
-    getUriPage: function(args) {
-        if (!args) {
-            return 0;
-        }
-
-        args = $.makeArray(args);
-        var pager = args[args.length - 1] || '';
-        if ((/p\d+/).test(pager)) {
-            return pager.slice(1);
-        }
-        else {
-            return 0;
-        }
-    },
-
-    // 取URI参数中的tab名，args 为数组
-    getUriTab: function(args) {
-        var defaultName = this.layoutData.items[0].name;
-
-        if (!args) {
-            return defaultName;
-        }
-
-        args = $.makeArray(args);
-        var tab = args[0] || '';
-        if ((/tab-.+/).test(tab)) {
-            return tab.slice(4);
-        }
-        else {
-            return defaultName;
-        }
     },
 
     // 验证组件表单
@@ -1721,5 +1378,5 @@ var componentSys = {
             return true;
         }
     }
-
 };
+

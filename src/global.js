@@ -176,7 +176,9 @@ var triggerEvent = function(eventName, param, obj) {
 
 // 创建名字空间
 namespace('Core', TF);
+namespace('Mentor', TF);
 namespace('Component', TF);
 namespace('Config', TF);
 namespace('Library', TF);
 namespace('Helper', TF);
+

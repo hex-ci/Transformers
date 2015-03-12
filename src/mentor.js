@@ -98,3 +98,42 @@ mentor.Form = (function() {
 
     return exports;
 })();
+
+
+// 扩展 TF 框架的功能
+TF.Mentor = {
+    _templateRenderBefore: [],
+    _templateRenderAfter: [],
+    _routeBefore: [],
+    _routeAfter: [],
+    _routeFilteringBefore: [],
+    _routeFilteringAfter: [],
+
+    extendComponent: function(options) {
+        var me = this;
+
+        if (!$.isPlainObject(options)) {
+            return;
+        }
+
+        var func = {
+            TemplateRenderBefore: '_templateRenderBefore',
+            TemplateRenderAfter: '_templateRenderAfter',
+            RouteBefore: '_routeBefore',
+            RouteAfter: '_routeAfter',
+            RouteFilteringBefore: '_routeFilteringBefore',
+            RouteFilteringAfter: '_routeFilteringAfter'
+        };
+
+        $.each(func, function(key, value){
+            if ($.isFunction(options[key])) {
+                me[value].push(options[key]);
+                delete options[key];
+            }
+        });
+
+        // 直接注入到组件的 sys 名字空间中
+        mix(componentSys, options);
+    }
+};
+
