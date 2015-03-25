@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-03-12
+ * Date: 2015-03-25
  */
 
  ;(function(root, factory) {
@@ -269,12 +269,10 @@ mentor.Status = (function(){
 
 // 模板渲染相关的方法
 mentor.Template = (function(){
-    var isfun = $.isFunction;
-
     var exports = {
-        render: function(appName, text, opts) {
+        render: function(appName, text, opts, element) {
             var mt = TF.Config[appName].mentor;
-            if (mt.Template && isfun(mt.Template.render)){
+            if (mt.Template && $.isFunction(mt.Template.render)) {
                 return mt.Template.render.apply(mt.Template, [].slice.call(arguments, 1));
             }
             else {
@@ -1689,7 +1687,7 @@ var componentSys = {
 
             if (obj && template.length > 0) {
                 // 是客户端渲染，执行模板操作
-                this.find().html(mentor.Template.render(this.appName, template.html(), {'ComponentData': obj}));
+                this.find().html(mentor.Template.render(this.appName, template.html(), {'ComponentData': obj}, template));
             }
 
             this.instance.options['TFData'] = obj;
@@ -2346,7 +2344,7 @@ var componentSys = {
 
     // 静态渲染模板
     renderStaticTemplate: function(name, args) {
-        var html;
+        var html, el;
         var me = this;
 
         args = args || {};
@@ -2357,15 +2355,17 @@ var componentSys = {
         $.each(name, function(index, item){
             // 根据不同情况取 Target 名
             if ($.type(item) == 'string') {
-                html = me.find('.TFTemplate-' + item).html();
-                me.find('.TFTarget-' + item).html(mentor.Template.render(me.appName, html, args));
+                el = me.find('.TFTemplate-' + item);
+                html = el.html();
+                me.find('.TFTarget-' + item).html(mentor.Template.render(me.appName, html, args, el));
                 me.templateData[item] = args;
             }
             else if ($.isPlainObject(item)) {
-                html = me.find('.TFTemplate-' + item.template).html();
+                el = me.find('.TFTemplate-' + item.template);
+                html = el.html();
 
                 if ($.type(item.target) == 'string') {
-                    me.find('.TFTarget-' + item.target).html(mentor.Template.render(me.appName, html, args));
+                    me.find('.TFTarget-' + item.target).html(mentor.Template.render(me.appName, html, args, el));
                 }
                 else {
                     var targetElement = $(item.target);
@@ -2373,12 +2373,12 @@ var componentSys = {
                     var className;
                     if (match) {
                         className = match[1];
-                        $(item.target).html(mentor.Template.render(me.appName, html, args));
+                        $(item.target).html(mentor.Template.render(me.appName, html, args, el));
                     }
                     else {
                         className = 'gen-' + TF.Helper.Utility.random();
                         $(item.target).addClass('TFTarget-' + className);
-                        $(item.target).html(mentor.Template.render(me.appName, html, args));
+                        $(item.target).html(mentor.Template.render(me.appName, html, args, el));
                     }
 
                     item.target = className;
@@ -2392,7 +2392,9 @@ var componentSys = {
 
     // 取得渲染后的模板内容
     getRenderedTemplate: function(name, args) {
-        return mentor.Template.render(this.appName, this.find('.TFTemplate-' + name).html(), args || {});
+        var el = this.find('.TFTemplate-' + name);
+
+        return mentor.Template.render(this.appName, el.html(), args || {}, el);
     },
 
     // 动态渲染模板，支持自动分页
@@ -2566,7 +2568,7 @@ var componentSys = {
                         result.__TF.target = targetName[i];
                         object = $(target[i]);
                         try {
-                            object.html(mentor.Template.render(me.appName, t.html(), result));
+                            object.html(mentor.Template.render(me.appName, t.html(), result, t));
                         }
                         catch(e) {
                             object.html(e);
@@ -3000,7 +3002,7 @@ var defineComponentClass = function(data) {
 
 // 制作组件管理器类
 TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallback){
-    var length = 0,
+    var componentLength = 0,
         progressLength = 0,
         failureLength = 0,
         // 组件关联数组，key 为组件名，value 为组件实例
@@ -3009,10 +3011,6 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
         subscriptions = new TF.Library.Hash(),
         // 预装载关联数组，key 为组件名，value 为组件加载选项数组
         //preload =  new TF.Library.Hash(),
-        // 后台组件关联数组，key 为组件名，value 为组件创建 Options
-        backgroundComponents = new TF.Library.Hash(),
-        // 后台某组件最后收到的消息，key 为组件名，value 为消息体（消息名+消息参数的数组）
-        backgroundLastMessage = new TF.Library.Hash(),
         // 是否正在使用进度条装载组件
         isLoading = false,
         // 组件别名关联数组
@@ -3034,7 +3032,7 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
 
         progressLength++;
 
-        if (progressLength >= length) {
+        if (progressLength >= componentLength) {
             completeProgress();
         }
     };
@@ -3152,7 +3150,11 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
 
             progressLength = 0;
 
-            components.each(function(index,item) {
+            components.each(function(index, item) {
+                if (item[0].async === true) {
+                    return;
+                }
+
                 item[0].options.__index = 0;
                 var obj = new TF.Library.ComponentLoader(item[0].options, me);
                 if (item.length > 1) {
@@ -3182,7 +3184,7 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
 
             defaultOptions = defaultOptions || {};
 
-            var op, name;
+            var op, name, async, com;
 
             $.each(options, function(index, item){
                 // 合并默认选项
@@ -3195,24 +3197,26 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
                 mix(op, defaultOptions);
 
                 name = getFullName(op.name);
+                async = (op.async === true);
+                com = {
+                    options: op,
+                    instance: null,
+                    loaded: false,
+                    async: async,
+                    // 后台某组件最后收到的消息，value 为消息体（消息名+消息参数的数组）
+                    message: null
+                };
 
-                length++;
+                if (!async) {
+                    componentLength++;
+                }
 
                 if (components.has(name)) {
                     // 组件已存在
-                    components.get(name).push({
-                        options: op,
-                        instance: null,
-                        loaded: false
-                    });
-
+                    components.get(name).push(com);
                 }
                 else {
-                    components.set(name, [{
-                        options: op,
-                        instance: null,
-                        loaded: false
-                    }]);
+                    components.set(name, [com]);
                 }
 
                 // 保存别名
@@ -3228,37 +3232,28 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
             return this;
         },
 
-        // TODO
-        // 添加组件到后台装载数组，等候随时装载
-        addToBg: function(options) {
-            backgroundComponents.set(getFullName(options.name), options);
-
-            return this;
-        },
-
-        // TODO
         // 装载某个后台组件
-        loadBgComponent: function(name) {
-            name = getFullName(name);
+        loadBgComponent: function(com) {
+            var fn = proxy(function(param) {
+                var fullName = getFullName(param.fullName);
 
-            var options = backgroundComponents.get(name);
-            var lastMessage;
+                if (param.instance == null) {
+                    $.error('Error: Component "' + fullName + '" load error! Please check Component Class Name or Define!');
+                }
 
-            if (components.has(name) || !options) {
-                return;
-            }
+                var currentObj = components.get(fullName)[param.instance.options.__index || 0];
 
-            var fn = proxy(function(e) {
-                //mentor.Status.unsetLoadingMsg();
-                lastMessage = backgroundLastMessage.get(name);
-                if (lastMessage) {
-                    this.post(name, lastMessage[0], lastMessage[1]);
+                currentObj.loaded = true;
+                currentObj.instance = param.instance;
+
+                if (currentObj.message) {
+                    currentObj.instance.sys.postMessage(currentObj.message[0], currentObj.message[1]);
+                    currentObj.message = null;
                 }
             }, this);
 
-            //mentor.Status.unsetLoadingMsg();
             // 加载组件
-            var obj = new TF.Library.ComponentLoader(options, this);
+            var obj = new TF.Library.ComponentLoader(com.options, this);
             addEvent(obj, 'complete', fn);
             obj.load();
         },
@@ -3302,16 +3297,16 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
 
                     if (com) {
                         // 传递给组件
-                        $.each(com, function(i, value) {
-                            if (value.loaded) {
-                                value.instance.sys.postMessage(msg, args);
+                        $.each(com, function() {
+                            if (this.loaded) {
+                                this.instance.sys.postMessage(msg, args);
+                            }
+                            else {
+                                // 没进行预加载的组件全部认为是异步加载
+                                this.message = [msg, args];
+                                me.loadBgComponent(this);
                             }
                         });
-                    }
-                    else {
-                        // 发送给后台组件
-//                            backgroundLastMessage.set(item, [msg, args]);
-//                            me.loadBgComponent(item);
                     }
                 }
                 else {
@@ -3323,9 +3318,8 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
                         com.instance.sys.postMessage(msg, args);
                     }
                     else {
-                        // 发送给后台组件
-//                            backgroundLastMessage.set(item, [msg, args]);
-//                            me.loadBgComponent(item);
+                        com.message = [msg, args];
+                        me.loadBgComponent(com);
                     }
                 }
             });
@@ -3340,7 +3334,7 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
         has: function(name) {
             name = getFullName(name);
             var nameObj = parseName(name);
-            return components.has(nameObj.name) || backgroundComponents.has(nameObj.name);
+            return components.has(nameObj.name);
         },
 
         // 取某个名字下的组件实例个数
@@ -3520,6 +3514,7 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
 
 // 全局组件管理器（单例模式）
 TF.Core.ComponentMgr = TF.Core.Application.createComponentMgrInstance(true);
+
 
 
 // URI 路由部分
