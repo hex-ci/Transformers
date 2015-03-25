@@ -312,7 +312,7 @@ var componentSys = {
 
             if (obj && template.length > 0) {
                 // 是客户端渲染，执行模板操作
-                this.find().html(mentor.Template.render(this.appName, template.html(), {'ComponentData': obj}));
+                this.find().html(mentor.Template.render(this.appName, template.html(), {'ComponentData': obj}, template));
             }
 
             this.instance.options['TFData'] = obj;
@@ -969,7 +969,7 @@ var componentSys = {
 
     // 静态渲染模板
     renderStaticTemplate: function(name, args) {
-        var html;
+        var html, el;
         var me = this;
 
         args = args || {};
@@ -980,15 +980,17 @@ var componentSys = {
         $.each(name, function(index, item){
             // 根据不同情况取 Target 名
             if ($.type(item) == 'string') {
-                html = me.find('.TFTemplate-' + item).html();
-                me.find('.TFTarget-' + item).html(mentor.Template.render(me.appName, html, args));
+                el = me.find('.TFTemplate-' + item);
+                html = el.html();
+                me.find('.TFTarget-' + item).html(mentor.Template.render(me.appName, html, args, el));
                 me.templateData[item] = args;
             }
             else if ($.isPlainObject(item)) {
-                html = me.find('.TFTemplate-' + item.template).html();
+                el = me.find('.TFTemplate-' + item.template);
+                html = el.html();
 
                 if ($.type(item.target) == 'string') {
-                    me.find('.TFTarget-' + item.target).html(mentor.Template.render(me.appName, html, args));
+                    me.find('.TFTarget-' + item.target).html(mentor.Template.render(me.appName, html, args, el));
                 }
                 else {
                     var targetElement = $(item.target);
@@ -996,12 +998,12 @@ var componentSys = {
                     var className;
                     if (match) {
                         className = match[1];
-                        $(item.target).html(mentor.Template.render(me.appName, html, args));
+                        $(item.target).html(mentor.Template.render(me.appName, html, args, el));
                     }
                     else {
                         className = 'gen-' + TF.Helper.Utility.random();
                         $(item.target).addClass('TFTarget-' + className);
-                        $(item.target).html(mentor.Template.render(me.appName, html, args));
+                        $(item.target).html(mentor.Template.render(me.appName, html, args, el));
                     }
 
                     item.target = className;
@@ -1015,7 +1017,9 @@ var componentSys = {
 
     // 取得渲染后的模板内容
     getRenderedTemplate: function(name, args) {
-        return mentor.Template.render(this.appName, this.find('.TFTemplate-' + name).html(), args || {});
+        var el = this.find('.TFTemplate-' + name);
+
+        return mentor.Template.render(this.appName, el.html(), args || {}, el);
     },
 
     // 动态渲染模板，支持自动分页
@@ -1189,7 +1193,7 @@ var componentSys = {
                         result.__TF.target = targetName[i];
                         object = $(target[i]);
                         try {
-                            object.html(mentor.Template.render(me.appName, t.html(), result));
+                            object.html(mentor.Template.render(me.appName, t.html(), result, t));
                         }
                         catch(e) {
                             object.html(e);

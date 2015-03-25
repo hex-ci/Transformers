@@ -39,12 +39,10 @@ mentor.Status = (function(){
 
 // 模板渲染相关的方法
 mentor.Template = (function(){
-    var isfun = $.isFunction;
-
     var exports = {
-        render: function(appName, text, opts) {
+        render: function(appName, text, opts, element) {
             var mt = TF.Config[appName].mentor;
-            if (mt.Template && isfun(mt.Template.render)){
+            if (mt.Template && $.isFunction(mt.Template.render)) {
                 return mt.Template.render.apply(mt.Template, [].slice.call(arguments, 1));
             }
             else {
