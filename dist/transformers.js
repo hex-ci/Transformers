@@ -1145,7 +1145,7 @@ mix(TF.Library.ComponentLoader.prototype, {
             appName = TF.Helper.Utility.getApplicationName(fullName);
             name = TF.Helper.Utility.getComponentName(fullName);
 
-            var isLoad = (typeof TF.Component[appName][name] != 'undefined');
+            var isLoad = (typeof TF.Component[appName][name] !== 'undefined');
 
             if (isLoad) {
                 // 组件类已加载
@@ -1164,7 +1164,7 @@ mix(TF.Library.ComponentLoader.prototype, {
             else {
                 // 组件类未加载
                 $.getScript(TF.Helper.Utility.getComponentJsUrl(appName, name), function(){
-                    if (typeof TF.Component[appName][name] != 'undefined') {
+                    if (typeof TF.Component[appName][name] !== 'undefined') {
                         // 加载成功
                         mentor = TF.Component[appName][name].prototype.Mentor;
                         if (mentor && mentor.name) {
@@ -1606,7 +1606,7 @@ var componentSys = {
                                 TF.Helper.Utility.getComponentViewUrl(TF.Helper.Utility.getApplicationName(this.viewName),
                                 TF.Helper.Utility.getComponentName(this.viewName)) : TF.Helper.Utility.getComponentViewUrl(this.appName, this.name));
         }
-        else if (this.options.url.indexOf("http:/"+"/") < 0) {
+        else if (this.options.url.indexOf("http://") < 0) {
             this.options.url = TF.Helper.Utility.siteUrl(this.appName, this.options.url);
         }
 
