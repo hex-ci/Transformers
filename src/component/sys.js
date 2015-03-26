@@ -231,7 +231,7 @@ var componentSys = {
                                 TF.Helper.Utility.getComponentViewUrl(TF.Helper.Utility.getApplicationName(this.viewName),
                                 TF.Helper.Utility.getComponentName(this.viewName)) : TF.Helper.Utility.getComponentViewUrl(this.appName, this.name));
         }
-        else if (this.options.url.indexOf("http:/"+"/") < 0) {
+        else if (this.options.url.indexOf("http://") < 0) {
             this.options.url = TF.Helper.Utility.siteUrl(this.appName, this.options.url);
         }
 
