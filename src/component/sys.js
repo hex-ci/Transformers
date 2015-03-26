@@ -1,4 +1,7 @@
 
+// 组件已加载的资源
+var loadedResource = {};
+
 // 组件系统内部方法
 var componentSys = {
     // 组件消息处理中心
@@ -131,6 +134,8 @@ var componentSys = {
 
     // 渲染组件
     render: function() {
+        var me = this;
+
         if (this.rendering) {
             return;
         }
@@ -140,17 +145,20 @@ var componentSys = {
         if (!this.instance || this.rendered) {
             return;
         }
-        if (this.options.applyTo) {
-            //直接渲染
-            this._loadComplete($(this.options.applyTo));
-        }
-        else if (this.options.contentEl) {
-            //直接渲染
-            this._loadComplete($(this.options.contentEl).clone());
-        }
-        else {
-            this._loadContent();
-        }
+
+        this._loadResource(function(){
+            if (me.options.applyTo) {
+                //直接渲染
+                me._loadComplete($(me.options.applyTo));
+            }
+            else if (me.options.contentEl) {
+                //直接渲染
+                me._loadComplete($(me.options.contentEl).clone());
+            }
+            else {
+                me._loadContent();
+            }
+        });
     },
 
     // 刷新组件内容
@@ -166,6 +174,54 @@ var componentSys = {
 
         this.refreshing = true;
         this._loadContent();
+    },
+
+    // 装载资源文件
+    _loadResource: function(callback) {
+        var me = this;
+        var resource = this.instance.RequireResource;
+        var sources;
+        var counter, loaded, url;
+
+        if (!resource) {
+            callback();
+            return;
+        }
+
+        if (resource.js) {
+            sources = $.makeArray(resource.js);
+
+            counter = 0;
+            loaded = 0;
+
+            $.each(sources, function(i, source) {
+                url = this;
+
+                if (url.indexOf("http://") !== 0) {
+                    url = TF.Helper.Utility.baseUrl(me.appName) + url;
+                }
+
+                if (!loadedResource[url]) {
+                    $.getScript(url)
+                        .always(function(){
+                            counter++;
+                            if ((counter + loaded) == sources.length) {
+                                callback();
+                            }
+                        });
+
+                    loadedResource[url] = true;
+                }
+                else {
+                    loaded++;
+                }
+            });
+
+            // 如果所有的都已经装载过，也要发出完成事件！！
+            if (loaded == sources.length && counter != sources.length) {
+                callback();
+            }
+        }
     },
 
     // 装载组件模板
