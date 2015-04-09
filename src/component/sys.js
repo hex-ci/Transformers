@@ -1381,7 +1381,7 @@ var componentSys = {
 
     destroy: function() {
         if (this.instance) {
-            if (this.instance.DomDestroy(this.instance) == false) {
+            if (this.instance.DomDestroy(this.instance) === false) {
                 return;
             }
         }
