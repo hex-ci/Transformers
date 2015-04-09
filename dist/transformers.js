@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-03-26
+ * Date: 2015-04-09
  */
 
  ;(function(root, factory) {
@@ -2756,7 +2756,7 @@ var componentSys = {
 
     destroy: function() {
         if (this.instance) {
-            if (this.instance.DomDestroy(this.instance) == false) {
+            if (this.instance.DomDestroy(this.instance) === false) {
                 return;
             }
         }
