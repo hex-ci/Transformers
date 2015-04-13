@@ -1635,7 +1635,7 @@ var componentSys = {
             type: 'GET',
             timeout: 10000,
             dataType: 'text',
-            cache: this.options.cache,
+            cache: typeof this.options.cache === 'undefined' ? false : this.options.cache,
             xhrFields: {
                 'withCredentials': true
             },
@@ -2289,6 +2289,7 @@ var componentSys = {
             type: 'GET',
             timeout: 10000,
             dataType: 'text',
+            cache: false,
             xhrFields: {
                 'withCredentials': true
             },
@@ -2565,6 +2566,7 @@ var componentSys = {
             url: url,
             type: 'GET',
             dataType: 'text',
+            cache: false,
             xhrFields: {
                 'withCredentials': true
             },
