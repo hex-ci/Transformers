@@ -202,13 +202,17 @@ var componentSys = {
                 }
 
                 if (!loadedResource[url]) {
-                    $.getScript(url)
-                        .always(function(){
-                            counter++;
-                            if ((counter + loaded) == sources.length) {
-                                callback();
-                            }
-                        });
+                    $.ajax({
+                        type: "GET",
+                        url: url,
+                        dataType: "script",
+                        cache: true
+                    }).always(function(){
+                        counter++;
+                        if ((counter + loaded) == sources.length) {
+                            callback();
+                        }
+                    });
 
                     loadedResource[url] = true;
                 }
@@ -235,19 +239,12 @@ var componentSys = {
             this.options.url = TF.Helper.Utility.siteUrl(this.appName, this.options.url);
         }
 
-        if (!this.options.hasCache) {
-            this.options.data = this.options.data || {};
-            if ($.isString(this.options.data)) {
-                this.options.data = unserialize(this.options.data);
-            }
-            this.options.data['_reqno'] = TF.Helper.Utility.random();
-        }
-
         this.loader = $.ajax(this.options.url, {
             data: this.options.data || '',
             type: 'GET',
             timeout: 10000,
             dataType: 'text',
+            cache: this.options.cache,
             xhrFields: {
                 'withCredentials': true
             },
@@ -925,14 +922,6 @@ var componentSys = {
             }
         }
 
-        if (!ajaxOptions.hasCache && ajaxOptions.type == 'GET') {
-            ajaxOptions.data = ajaxOptions.data || {};
-            if ($.isString(ajaxOptions.data)) {
-                ajaxOptions.data = unserialize(ajaxOptions.data);
-            }
-            ajaxOptions.data['_reqno'] = TF.Helper.Utility.random();
-        }
-
         // 如果已经发送请求，则取消上一个请求
         var requestName = url;
         var currentRequester = this.sendRequester.get(requestName);
@@ -1283,14 +1272,6 @@ var componentSys = {
             }
         };
         mix(ajaxOptions, args, true);
-
-        if (!ajaxOptions.hasCache && ajaxOptions.type == 'GET') {
-            ajaxOptions.data = ajaxOptions.data || {};
-            if ($.isString(ajaxOptions.data)) {
-                ajaxOptions.data = unserialize(ajaxOptions.data);
-            }
-            ajaxOptions.data['_reqno'] = TF.Helper.Utility.random();
-        }
 
         // 如果已经发送请求，则取消上一个请求
         var currentRequester = this.templateRequester.get(requestName.join());

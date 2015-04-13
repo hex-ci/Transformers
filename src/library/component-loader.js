@@ -56,7 +56,12 @@ mix(TF.Library.ComponentLoader.prototype, {
             this._createInstance();
         }
         else {
-            $.getScript(TF.Helper.Utility.getComponentJsUrl(this.appName, this.name))
+            $.ajax({
+                type: "GET",
+                url: TF.Helper.Utility.getComponentJsUrl(this.appName, this.name),
+                dataType: "script",
+                cache: true
+            })
             .done(function(){
                 if (typeof TF.Component[me.appName][me.name] !== 'undefined') {
                     // 加载成功
@@ -123,7 +128,13 @@ mix(TF.Library.ComponentLoader.prototype, {
             }
             else {
                 // 组件类未加载
-                $.getScript(TF.Helper.Utility.getComponentJsUrl(appName, name), function(){
+                $.ajax({
+                    type: "GET",
+                    url: TF.Helper.Utility.getComponentJsUrl(appName, name),
+                    dataType: "script",
+                    cache: true
+                })
+                .done(function(){
                     if (typeof TF.Component[appName][name] !== 'undefined') {
                         // 加载成功
                         mentor = TF.Component[appName][name].prototype.Mentor;
@@ -141,6 +152,11 @@ mix(TF.Library.ComponentLoader.prototype, {
                     else {
                         // TODO: 要抛一个异常，表示依赖加载失败，或者是触发一个加载失败的事件
                     }
+                })
+                .fail(function( jqxhr, settings, exception ){
+                    console && console.error(exception.message);
+                    // 加载失败
+                    // 应该返回错误，或者记录日志
                 });
             }
 
