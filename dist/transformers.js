@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-04-09
+ * Date: 2015-04-13
  */
 
  ;(function(root, factory) {
@@ -1096,7 +1096,12 @@ mix(TF.Library.ComponentLoader.prototype, {
             this._createInstance();
         }
         else {
-            $.getScript(TF.Helper.Utility.getComponentJsUrl(this.appName, this.name))
+            $.ajax({
+                type: "GET",
+                url: TF.Helper.Utility.getComponentJsUrl(this.appName, this.name),
+                dataType: "script",
+                cache: true
+            })
             .done(function(){
                 if (typeof TF.Component[me.appName][me.name] !== 'undefined') {
                     // 加载成功
@@ -1163,7 +1168,13 @@ mix(TF.Library.ComponentLoader.prototype, {
             }
             else {
                 // 组件类未加载
-                $.getScript(TF.Helper.Utility.getComponentJsUrl(appName, name), function(){
+                $.ajax({
+                    type: "GET",
+                    url: TF.Helper.Utility.getComponentJsUrl(appName, name),
+                    dataType: "script",
+                    cache: true
+                })
+                .done(function(){
                     if (typeof TF.Component[appName][name] !== 'undefined') {
                         // 加载成功
                         mentor = TF.Component[appName][name].prototype.Mentor;
@@ -1181,6 +1192,11 @@ mix(TF.Library.ComponentLoader.prototype, {
                     else {
                         // TODO: 要抛一个异常，表示依赖加载失败，或者是触发一个加载失败的事件
                     }
+                })
+                .fail(function( jqxhr, settings, exception ){
+                    console && console.error(exception.message);
+                    // 加载失败
+                    // 应该返回错误，或者记录日志
                 });
             }
 
@@ -1577,13 +1593,17 @@ var componentSys = {
                 }
 
                 if (!loadedResource[url]) {
-                    $.getScript(url)
-                        .always(function(){
-                            counter++;
-                            if ((counter + loaded) == sources.length) {
-                                callback();
-                            }
-                        });
+                    $.ajax({
+                        type: "GET",
+                        url: url,
+                        dataType: "script",
+                        cache: true
+                    }).always(function(){
+                        counter++;
+                        if ((counter + loaded) == sources.length) {
+                            callback();
+                        }
+                    });
 
                     loadedResource[url] = true;
                 }
@@ -1610,19 +1630,12 @@ var componentSys = {
             this.options.url = TF.Helper.Utility.siteUrl(this.appName, this.options.url);
         }
 
-        if (!this.options.hasCache) {
-            this.options.data = this.options.data || {};
-            if ($.isString(this.options.data)) {
-                this.options.data = unserialize(this.options.data);
-            }
-            this.options.data['_reqno'] = TF.Helper.Utility.random();
-        }
-
         this.loader = $.ajax(this.options.url, {
             data: this.options.data || '',
             type: 'GET',
             timeout: 10000,
             dataType: 'text',
+            cache: this.options.cache,
             xhrFields: {
                 'withCredentials': true
             },
@@ -2300,14 +2313,6 @@ var componentSys = {
             }
         }
 
-        if (!ajaxOptions.hasCache && ajaxOptions.type == 'GET') {
-            ajaxOptions.data = ajaxOptions.data || {};
-            if ($.isString(ajaxOptions.data)) {
-                ajaxOptions.data = unserialize(ajaxOptions.data);
-            }
-            ajaxOptions.data['_reqno'] = TF.Helper.Utility.random();
-        }
-
         // 如果已经发送请求，则取消上一个请求
         var requestName = url;
         var currentRequester = this.sendRequester.get(requestName);
@@ -2658,14 +2663,6 @@ var componentSys = {
             }
         };
         mix(ajaxOptions, args, true);
-
-        if (!ajaxOptions.hasCache && ajaxOptions.type == 'GET') {
-            ajaxOptions.data = ajaxOptions.data || {};
-            if ($.isString(ajaxOptions.data)) {
-                ajaxOptions.data = unserialize(ajaxOptions.data);
-            }
-            ajaxOptions.data['_reqno'] = TF.Helper.Utility.random();
-        }
 
         // 如果已经发送请求，则取消上一个请求
         var currentRequester = this.templateRequester.get(requestName.join());
