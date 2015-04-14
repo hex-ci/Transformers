@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-04-13
+ * Date: 2015-04-14
  */
 
  ;(function(root, factory) {
@@ -2323,13 +2323,13 @@ var componentSys = {
 
         ajaxOptions.context.options = ajaxOptions;
 
-        currentRequester = $.ajax(ajaxOptions);
-
-        this.sendRequester.set(requestName, currentRequester);
-
         if (options.loadingMsg !== false) {
             this.setLoadingMsg(options.loadingMsg);
         }
+
+        currentRequester = $.ajax(ajaxOptions);
+
+        this.sendRequester.set(requestName, currentRequester);
 
         return currentRequester;
     },
@@ -2470,10 +2470,6 @@ var componentSys = {
         //{'template':'xxx', 'target':'xxxx'}
         if (!args) {
             args = {};
-        }
-
-        if (args.loadingMsg !== false) {
-            this.setLoadingMsg(args.loadingMsg);
         }
 
         var url = this.getUrl(actionName || TF.Helper.Utility.getDefaultDataUri(this.appName));
@@ -2670,6 +2666,10 @@ var componentSys = {
         var currentRequester = this.templateRequester.get(requestName.join());
         if (currentRequester) {
             currentRequester.abort();
+        }
+
+        if (args.loadingMsg !== false) {
+            this.setLoadingMsg(args.loadingMsg);
         }
 
         currentRequester = $.ajax(ajaxOptions);
@@ -3616,8 +3616,7 @@ TF.Core.Router = (function() {
         }
         else {
             // 非法参数
-            //window.location = '#tf-' + TF.Helper.Utility.toComponentUriName(defaultName);
-            mentor.Status.setFailMsg(TF.Helper.Utility.getApplicationName(fullName), TF.Helper.Utility.toComponentUriName(name) + ' uri error!');
+            console && console.error(TF.Helper.Utility.toComponentUriName(name) + ' uri error!');
         }
 
         // 额外路由
