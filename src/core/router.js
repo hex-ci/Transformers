@@ -43,8 +43,7 @@ TF.Core.Router = (function() {
         }
         else {
             // 非法参数
-            //window.location = '#tf-' + TF.Helper.Utility.toComponentUriName(defaultName);
-            mentor.Status.setFailMsg(TF.Helper.Utility.getApplicationName(fullName), TF.Helper.Utility.toComponentUriName(name) + ' uri error!');
+            $.error(TF.Helper.Utility.toComponentUriName(name) + ' uri error!');
         }
 
         // 额外路由
