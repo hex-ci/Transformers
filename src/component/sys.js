@@ -932,13 +932,13 @@ var componentSys = {
 
         ajaxOptions.context.options = ajaxOptions;
 
-        currentRequester = $.ajax(ajaxOptions);
-
-        this.sendRequester.set(requestName, currentRequester);
-
         if (options.loadingMsg !== false) {
             this.setLoadingMsg(options.loadingMsg);
         }
+
+        currentRequester = $.ajax(ajaxOptions);
+
+        this.sendRequester.set(requestName, currentRequester);
 
         return currentRequester;
     },
@@ -1079,10 +1079,6 @@ var componentSys = {
         //{'template':'xxx', 'target':'xxxx'}
         if (!args) {
             args = {};
-        }
-
-        if (args.loadingMsg !== false) {
-            this.setLoadingMsg(args.loadingMsg);
         }
 
         var url = this.getUrl(actionName || TF.Helper.Utility.getDefaultDataUri(this.appName));
@@ -1279,6 +1275,10 @@ var componentSys = {
         var currentRequester = this.templateRequester.get(requestName.join());
         if (currentRequester) {
             currentRequester.abort();
+        }
+
+        if (args.loadingMsg !== false) {
+            this.setLoadingMsg(args.loadingMsg);
         }
 
         currentRequester = $.ajax(ajaxOptions);
