@@ -35,3 +35,8 @@ cd Transformers && npm run build
 
 * [快速开始](https://github.com/CodeIgniter/Transformers/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B)
 * [目录](https://github.com/CodeIgniter/Transformers/wiki/%E7%9B%AE%E5%BD%95)
+
+演示站点
+------------
+
+http://www.iqwer.tk/   (注：服务器在美国，访问较慢，请见谅)
