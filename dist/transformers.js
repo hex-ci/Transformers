@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-04-14
+ * Date: 2015-04-30
  */
 
  ;(function(root, factory) {
@@ -3160,6 +3160,12 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
         if (match) {
             name = match[1];
             index = match[2];
+
+            // 此处为了兼容 IE8 浏览器
+            // 在 IE8 下 match[2] 为空字符串，而在 webkit 下是 undefined
+            if (index === '') {
+                index = undefined;
+            }
 
             if (index !== undefined && isNaN(index)) {
                 // 是别名
