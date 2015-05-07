@@ -39,4 +39,4 @@ cd Transformers && npm run build
 演示站点
 ------------
 
-http://www.iqwer.tk/  User: `webmaster@iqwer.tk` Pass: 123456  (注：服务器在美国，国内访问较慢，请见谅）
+http://www.iqwer.tk/  User: `webmaster@iqwer.tk` Pass: `123456`  (注：服务器在美国，国内访问较慢，请见谅）
