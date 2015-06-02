@@ -230,13 +230,27 @@ var componentSys = {
 
     // 装载组件模板
     _loadContent: function() {
+        var me = this;
+
          // 如果组件自己提供视图，则用组件自己的视图，不要去远程加载
         if ($.isString(this.instance.ComponentView)) {
             this._loadComplete($(this.instance.ComponentView));
+
             return;
         }
         else if ($.isFunction(this.instance.ComponentView)) {
-            this._loadComplete($(this.instance.ComponentView()));
+            var result = this.instance.ComponentView();
+
+            // 如果是 Promise 对象，表示可能是 AJAX 加载，则等到数据加载完毕再渲染视图
+            if ($.isPlainObject(result) && $.isFunction(result.promise)) {
+                result.done(function(data){
+                    me._loadComplete($(data));
+                });
+            }
+            else {
+                this._loadComplete($(result));
+            }
+
             return;
         }
 
