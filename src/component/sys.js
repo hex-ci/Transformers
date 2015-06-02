@@ -230,6 +230,16 @@ var componentSys = {
 
     // 装载组件模板
     _loadContent: function() {
+         // 如果组件自己提供视图，则用组件自己的视图，不要去远程加载
+        if ($.isString(this.instance.ComponentView)) {
+            this._loadComplete($(this.instance.ComponentView));
+            return;
+        }
+        else if ($.isFunction(this.instance.ComponentView)) {
+            this._loadComplete($(this.instance.ComponentView()));
+            return;
+        }
+
         if (this.options.url == '') {
             this.options.url = (this.viewName ?
                                 TF.Helper.Utility.getComponentViewUrl(TF.Helper.Utility.getApplicationName(this.viewName),
