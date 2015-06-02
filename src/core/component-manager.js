@@ -118,7 +118,7 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
         $.each(components.get(fullName).slice(1), function(index, item) {
             item.options.__index = index + 1;
             var obj = new TF.Library.ComponentLoader(item.options, exports);
-            addEvent(obj, 'complete', loadComplete);
+            addEvent(obj, 'instanced', loadComplete);
             addEvent(obj, 'failure', loadComplete);
             obj.load();
         });
@@ -137,7 +137,7 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
         $.each(components.get(fullName).slice(1), function(index, item) {
             item.options.__index = index + 1;
             var obj = new TF.Library.ComponentLoader(item.options, exports);
-            addEvent(obj, 'complete', renderComplete);
+            addEvent(obj, 'instanced', renderComplete);
             addEvent(obj, 'failure', renderComplete);
             obj.load();
         });
@@ -210,11 +210,11 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
                 item[0].options.__index = 0;
                 var obj = new TF.Library.ComponentLoader(item[0].options, me);
                 if (item.length > 1) {
-                    addEvent(obj, 'complete', (withRender ? renderFirstComplete : loadFirstComplete));
+                    addEvent(obj, 'instanced', (withRender ? renderFirstComplete : loadFirstComplete));
                     addEvent(obj, 'failure', (withRender ? renderFirstComplete : loadFirstComplete));
                 }
                 else {
-                    addEvent(obj, 'complete', (withRender ? renderComplete : loadComplete));
+                    addEvent(obj, 'instanced', (withRender ? renderComplete : loadComplete));
                     addEvent(obj, 'failure', (withRender ? renderComplete : loadFailure));
                 }
                 obj.load();
@@ -306,7 +306,7 @@ TF.Core.Application.createComponentMgrInstance = function(isGlobal, loadedCallba
 
             // 加载组件
             var obj = new TF.Library.ComponentLoader(com.options, this);
-            addEvent(obj, 'complete', fn);
+            addEvent(obj, 'instanced', fn);
             obj.load();
         },
 
