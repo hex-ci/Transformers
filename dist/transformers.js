@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-04-30
+ * Date: 2015-06-02
  */
 
  ;(function(root, factory) {
@@ -1621,6 +1621,30 @@ var componentSys = {
 
     // 装载组件模板
     _loadContent: function() {
+        var me = this;
+
+         // 如果组件自己提供视图，则用组件自己的视图，不要去远程加载
+        if ($.isString(this.instance.ComponentView)) {
+            this._loadComplete($(this.instance.ComponentView));
+
+            return;
+        }
+        else if ($.isFunction(this.instance.ComponentView)) {
+            var result = this.instance.ComponentView();
+
+            // 如果是 Promise 对象，表示可能是 AJAX 加载，则等到数据加载完毕再渲染视图
+            if ($.isPlainObject(result) && $.isFunction(result.promise)) {
+                result.done(function(data){
+                    me._loadComplete($(data));
+                });
+            }
+            else {
+                this._loadComplete($(result));
+            }
+
+            return;
+        }
+
         if (this.options.url == '') {
             this.options.url = (this.viewName ?
                                 TF.Helper.Utility.getComponentViewUrl(TF.Helper.Utility.getApplicationName(this.viewName),
@@ -2454,9 +2478,10 @@ var componentSys = {
 
     // 取得渲染后的模板内容
     getRenderedTemplate: function(name, args) {
-        var el = this.find('.TFTemplate-' + name);
+        var realName = name.split('.')[0];
+        var el = this.find('.TFTemplate-' + realName);
 
-        return mentor.Template.render(this.appName, el.html(), args || {}, el);
+        return mentor.Template.render(this.appName, el.html(), args || {}, el, name);
     },
 
     // 动态渲染模板，支持自动分页
