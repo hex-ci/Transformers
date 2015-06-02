@@ -1063,9 +1063,10 @@ var componentSys = {
 
     // 取得渲染后的模板内容
     getRenderedTemplate: function(name, args) {
-        var el = this.find('.TFTemplate-' + name);
+        var realName = name.split('.')[0];
+        var el = this.find('.TFTemplate-' + realName);
 
-        return mentor.Template.render(this.appName, el.html(), args || {}, el);
+        return mentor.Template.render(this.appName, el.html(), args || {}, el, name);
     },
 
     // 动态渲染模板，支持自动分页
