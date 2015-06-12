@@ -56,7 +56,7 @@ mix(TF.Component.Default.prototype, {
     LoadError: function() {
         // 组件装载出错
         if (TF.Config[this.sys.appName].debug) {
-            console && console.error('Component [' + this.sys.getComponentName() + '] load error! Please refresh!');
+            typeof console === 'object' && console.error('Component [' + this.sys.getComponentName() + '] load error! Please refresh!');
             //mentor.Status.setFailMsg(this.sys.appName, 'Component [' + this.sys.getComponentName() + '] load error! Please refresh!');
         }
     },

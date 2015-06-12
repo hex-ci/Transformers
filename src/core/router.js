@@ -43,7 +43,7 @@ TF.Core.Router = (function() {
         }
         else {
             // 非法参数
-            console && console.error(TF.Helper.Utility.toComponentUriName(name) + ' uri error!');
+            typeof console === 'object' && console.error(TF.Helper.Utility.toComponentUriName(name) + ' uri error!');
         }
 
         // 额外路由

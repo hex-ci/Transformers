@@ -389,7 +389,7 @@ var componentSys = {
 
             if (obj && template.length > 0) {
                 // 是客户端渲染，执行模板操作
-                this.find().html(mentor.Template.render(this.appName, template.html(), {'ComponentData': obj}, template));
+                mentor.Template.render(this.appName, template, this.find(), {'ComponentData': obj});
             }
 
             this.instance.options['TFData'] = obj;
@@ -491,7 +491,7 @@ var componentSys = {
             triggerEvent('failure', this._getEventObject(), this.instance);
 
             if (TF.Config[this.appName].debug) {
-                console && console.error('Component [' + this.getComponentName() + '] load error!');
+                typeof console === 'object' && console.error('Component [' + this.getComponentName() + '] load error!');
             }
 
             this.instance.LoadError();
@@ -510,7 +510,7 @@ var componentSys = {
     },
 
     _loadError: function(msg) {
-        console && console.error(msg);
+        typeof console === 'object' && console.error(msg);
     },
 
     _delegateEvent: function(configs){
@@ -623,7 +623,15 @@ var componentSys = {
                 args.__data = me._getBindingData(this);
             }
 
-            me.postMessage(action, args);
+            if (/[a-z0-9-]+?-action$/.test(action)) {
+                me.postMessage(action, args);
+            }
+            else {
+                var actionName = $.camelCase(action);
+                if (me.instance && $.isFunction(me.instance[actionName])) {
+                    return me.instance[actionName].call(me.instance, args, this);
+                }
+            }
         });
     },
 
@@ -1002,7 +1010,7 @@ var componentSys = {
         // 输出调试信息
         if (TF.Config[me.sys.appName].debug) {
             var param = this.options.data && ($.type(this.options.data) == 'string' ? this.options.data : $.param(this.options.data));
-            console && console.debug('url: ' + this.options.url + (param ? '?' + param : ''));
+            typeof console === 'object' && console.debug('url: ' + this.options.url + (param ? '?' + param : ''));
         }
 
         var isError = !mentor.Ajax.validation(me.sys.appName, result);
@@ -1039,7 +1047,7 @@ var componentSys = {
 
     // 静态渲染模板
     renderStaticTemplate: function(name, args) {
-        var html, el;
+        var el;
         var me = this;
 
         args = args || {};
@@ -1051,16 +1059,14 @@ var componentSys = {
             // 根据不同情况取 Target 名
             if ($.type(item) == 'string') {
                 el = me.find('.TFTemplate-' + item);
-                html = el.html();
-                me.find('.TFTarget-' + item).html(mentor.Template.render(me.appName, html, args, el));
+                mentor.Template.render(me.appName, el, me.find('.TFTarget-' + item), args);
                 me.templateData[item] = args;
             }
             else if ($.isPlainObject(item)) {
                 el = me.find('.TFTemplate-' + item.template);
-                html = el.html();
 
                 if ($.type(item.target) == 'string') {
-                    me.find('.TFTarget-' + item.target).html(mentor.Template.render(me.appName, html, args, el));
+                    mentor.Template.render(me.appName, el, me.find('.TFTarget-' + item.target), args);
                 }
                 else {
                     var targetElement = $(item.target);
@@ -1068,12 +1074,12 @@ var componentSys = {
                     var className;
                     if (match) {
                         className = match[1];
-                        $(item.target).html(mentor.Template.render(me.appName, html, args, el));
+                        mentor.Template.render(me.appName, el, $(item.target), args);
                     }
                     else {
                         className = 'gen-' + TF.Helper.Utility.random();
                         $(item.target).addClass('TFTarget-' + className);
-                        $(item.target).html(mentor.Template.render(me.appName, html, args, el));
+                        mentor.Template.render(me.appName, el, $(item.target), args);
                     }
 
                     item.target = className;
@@ -1090,7 +1096,7 @@ var componentSys = {
         var realName = name.split('.')[0];
         var el = this.find('.TFTemplate-' + realName);
 
-        return mentor.Template.render(this.appName, el.html(), args || {}, el, name);
+        return mentor.Template.getRenderedText(this.appName, el, args || {}, name);
     },
 
     // 动态渲染模板，支持自动分页
@@ -1175,9 +1181,6 @@ var componentSys = {
         });
 
         // ajax 模版渲染
-        //console.info(name);
-        //var waiter = [];
-        var object;
 
 //            if (url.indexOf("http://") < 0 && url.indexOf('/') != 0) {
 //                url = TF.Helper.Utility.siteUrl(url);
@@ -1213,7 +1216,7 @@ var componentSys = {
                 // 输出调试信息
                 if (TF.Config[me.appName].debug) {
                     var param = this.data && ($.type(this.data) == 'string' ? this.data : $.param(this.data));
-                    console && console.debug('url: ' + this.url + (param ? '?' + param : ''));
+                    typeof console === 'object' && console.debug('url: ' + this.url + (param ? '?' + param : ''));
                 }
 
                 var response = responseText;
@@ -1259,13 +1262,7 @@ var componentSys = {
                     $.each(template, function(i, t) {
                         result.__TF.template = templateName[i];
                         result.__TF.target = targetName[i];
-                        object = $(target[i]);
-                        try {
-                            object.html(mentor.Template.render(me.appName, t.html(), result, t));
-                        }
-                        catch(e) {
-                            object.html(e);
-                        }
+                        mentor.Template.render(me.appName, t, target[i], result);
                     });
 
                     if (typeof(args) != 'undefined') {

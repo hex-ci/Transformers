@@ -74,7 +74,7 @@ mix(TF.Library.ComponentLoader.prototype, {
                 }
             })
             .fail(function( jqxhr, settings, exception ){
-                console && console.error(exception.message);
+                typeof console === 'object' && console.error(exception.message);
                 // 加载失败
                 // 应该返回错误，或者记录日志
                 me._failure();
@@ -154,7 +154,7 @@ mix(TF.Library.ComponentLoader.prototype, {
                     }
                 })
                 .fail(function( jqxhr, settings, exception ){
-                    console && console.error(exception.message);
+                    typeof console === 'object' && console.error(exception.message);
                     // 加载失败
                     // 应该返回错误，或者记录日志
                 });

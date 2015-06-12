@@ -40,13 +40,22 @@ mentor.Status = (function(){
 // 模板渲染相关的方法
 mentor.Template = (function(){
     var exports = {
-        render: function(appName, text, opts, element) {
+        getRenderedText: function(appName, template, data, name) {
+            var mt = TF.Config[appName].mentor;
+            if (mt.Template && $.isFunction(mt.Template.getRenderedText)) {
+                return mt.Template.getRenderedText.apply(mt.Template, [].slice.call(arguments, 1));
+            }
+            else {
+                return TF.Helper.Utility.template(template.html(), data);
+            }
+        },
+        render: function(appName, template, target, data, name) {
             var mt = TF.Config[appName].mentor;
             if (mt.Template && $.isFunction(mt.Template.render)) {
                 return mt.Template.render.apply(mt.Template, [].slice.call(arguments, 1));
             }
             else {
-                return TF.Helper.Utility.template(text, opts);
+                return target.html(TF.Helper.Utility.template(template.html(), data));
             }
         }
     };
