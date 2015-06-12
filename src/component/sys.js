@@ -1100,7 +1100,7 @@ var componentSys = {
     },
 
     // 动态渲染模板，支持自动分页
-    renderTemplate: function(name, args, actionName) {
+    renderTemplate: function(name, args) {
         var me = this;
 
         if (!name) {
@@ -1112,7 +1112,7 @@ var componentSys = {
             args = {};
         }
 
-        var url = this.getUrl(actionName || TF.Helper.Utility.getDefaultDataUri(this.appName));
+        var url = this.getUrl(args.uri || TF.Helper.Utility.getDefaultDataUri(this.appName));
 
         name = $.makeArray(name);
 
