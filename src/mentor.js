@@ -117,6 +117,8 @@ TF.Mentor = {
     _routeFilteringAfter: [],
     _sendBefore: [],
     _sendAfter: [],
+    _loadViewBefore: [],
+    _loadViewAfter: [],
 
     extendComponent: function(options) {
         var me = this;
@@ -133,7 +135,9 @@ TF.Mentor = {
             RouteFilteringBefore: '_routeFilteringBefore',
             RouteFilteringAfter: '_routeFilteringAfter',
             SendBefore: '_sendBefore',
-            SendAfter: '_sendAfter'
+            SendAfter: '_sendAfter',
+            LoadViewBefore: '_loadViewBefore',
+            LoadViewAfter: '_loadViewAfter'
         };
 
         $.each(func, function(key, value){

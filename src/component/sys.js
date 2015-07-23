@@ -263,6 +263,11 @@ var componentSys = {
             this.options.url = TF.Helper.Utility.siteUrl(this.appName, this.options.url);
         }
 
+        // load view before 钩子
+        $.each(TF.Mentor._loadViewBefore, function(){
+            this.call(me, me.options);
+        });
+
         this.loader = $.ajax(this.options.url, {
             data: this.options.data || '',
             type: 'GET',
