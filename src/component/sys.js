@@ -918,6 +918,8 @@ var componentSys = {
 
     // 封装组件内容 Request
     send: function(url, options) {
+        var me = this;
+
         if (url.indexOf("/") < 0) {
             url = this.getUrl(url);
         }
@@ -961,6 +963,11 @@ var componentSys = {
         if (currentRequester) {
             currentRequester.abort();
         }
+
+        // send before 钩子
+        $.each(TF.Mentor._sendBefore, function(){
+            this.call(me, ajaxOptions);
+        });
 
         ajaxOptions.context.options = ajaxOptions;
 
