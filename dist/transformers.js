@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-06-12
+ * Date: 2015-07-23
  */
 
  ;(function(root, factory) {
@@ -345,6 +345,8 @@ TF.Mentor = {
     _routeAfter: [],
     _routeFilteringBefore: [],
     _routeFilteringAfter: [],
+    _sendBefore: [],
+    _sendAfter: [],
 
     extendComponent: function(options) {
         var me = this;
@@ -359,7 +361,9 @@ TF.Mentor = {
             RouteBefore: '_routeBefore',
             RouteAfter: '_routeAfter',
             RouteFilteringBefore: '_routeFilteringBefore',
-            RouteFilteringAfter: '_routeFilteringAfter'
+            RouteFilteringAfter: '_routeFilteringAfter',
+            SendBefore: '_sendBefore',
+            SendAfter: '_sendAfter'
         };
 
         $.each(func, function(key, value){
@@ -2318,6 +2322,8 @@ var componentSys = {
 
     // 封装组件内容 Request
     send: function(url, options) {
+        var me = this;
+
         if (url.indexOf("/") < 0) {
             url = this.getUrl(url);
         }
@@ -2361,6 +2367,11 @@ var componentSys = {
         if (currentRequester) {
             currentRequester.abort();
         }
+
+        // send before 钩子
+        $.each(TF.Mentor._sendBefore, function(){
+            this.call(me, ajaxOptions);
+        });
 
         ajaxOptions.context.options = ajaxOptions;
 
