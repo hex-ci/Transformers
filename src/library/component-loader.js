@@ -102,13 +102,17 @@ mix(TF.Library.ComponentLoader.prototype, {
     // 返回组件实例
     _loadMentor: function(callback, fullName, parentClass) {
         var mentor;
-        var me = this;
         var appName;
         var name;
+
+        var me = this;
 
         if (fullName) {
             appName = TF.Helper.Utility.getApplicationName(fullName);
             name = TF.Helper.Utility.getComponentName(fullName);
+
+            // Application Name 不存在则创建
+            TF.Component[appName] = TF.Component[appName] || {};
 
             var isLoad = (typeof TF.Component[appName][name] !== 'undefined');
 

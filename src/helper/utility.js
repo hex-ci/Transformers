@@ -2,14 +2,19 @@
 TF.Helper.Utility = {
     baseUrl: function(appName) {
         appName = appName || defaultApplicationName;
+
         return TF.Config[appName].baseUrl;
     },
 
     siteUrl: function(appName, uri){
         appName = appName || defaultApplicationName;
 
-        if (uri.indexOf('http://') === 0) { return uri; }
-        else { return TF.Config[appName].baseUrl + uri; }
+        if (uri.indexOf('http://') === 0 || uri.indexOf('https://') === 0) {
+            return uri;
+        }
+        else {
+            return TF.Config[appName].baseUrl + uri;
+        }
     },
 
     // 根据组件名取得 Application Name
@@ -31,13 +36,21 @@ TF.Helper.Utility = {
         var cfg = TF.Config[appName];
 
         // 通过 Application Name 得到相应的配置信息
-        var pattern = cfg.dataUriPattern;
         var names = TF.Helper.Utility.splitComponentName(name);
 
-        var str = this.template(pattern, {
-            name: names,
-            uri: uri
-        });
+        var pattern = cfg.dataUriPattern;
+        var str;
+
+        if ($.isFunction(pattern)) {
+            str = pattern(names, uri, cfg.resourceVersion);
+        }
+        else {
+            str = this.template(pattern, {
+                name: names,
+                uri: uri,
+                ver: cfg.resourceVersion
+            });
+        }
 
         return cfg.baseUrl + str;
     },
@@ -46,11 +59,20 @@ TF.Helper.Utility = {
         var cfg = TF.Config[appName];
 
         // 通过 Application Name 得到相应的配置信息
-        var pattern = cfg.templateUriPattern;
         var names = TF.Helper.Utility.splitComponentName(name);
-        var str = this.template(pattern, {
-            name: names
-        });
+
+        var pattern = cfg.templateUriPattern;
+        var str;
+
+        if ($.isFunction(pattern)) {
+            str = pattern(names, cfg.resourceVersion);
+        }
+        else {
+            str = this.template(pattern, {
+                name: names,
+                ver: cfg.resourceVersion
+            });
+        }
 
         return cfg.baseUrl + str;
     },
@@ -59,13 +81,20 @@ TF.Helper.Utility = {
         var cfg = TF.Config[appName];
 
         // 通过 Application Name 得到相应的配置信息
-        var pattern = cfg.jsUriPattern;
         var names = TF.Helper.Utility.splitComponentName(name);
 
-        var str = this.template(pattern, {
-            name: names,
-            ver: cfg.resourceVersion
-        });
+        var pattern = cfg.jsUriPattern;
+        var str;
+
+        if ($.isFunction(pattern)) {
+            str = pattern(names, cfg.resourceVersion);
+        }
+        else {
+            str = this.template(pattern, {
+                name: names,
+                ver: cfg.resourceVersion
+            });
+        }
 
         return cfg.baseUrl + str;
     },
