@@ -120,13 +120,13 @@ mix(TF.Library.ComponentLoader.prototype, {
                 // 组件类已加载
                 mentor = TF.Component[appName][name].prototype.Mentor;
                 if (mentor && mentor.name) {
-                    me._loadMentor(function(){
+                    this._loadMentor(function(){
                         me._initMentor(fullName, parentClass, TF.Component[appName][name]);
                         callback();
                     }, mentor.name, TF.Component[appName][name]);
                 }
                 else {
-                    me._initMentor(fullName, parentClass, TF.Component[appName][name]);
+                    this._initMentor(fullName, parentClass, TF.Component[appName][name]);
                     callback();
                 }
             }
