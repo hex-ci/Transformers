@@ -138,13 +138,13 @@ mix(TF.Library.ComponentLoader.prototype, {
     },
 
     _loadMentor: function(callback, myClass) {
+        var me = this;
+
         var mentor;
         var appName;
         var name;
 
-        var me = this;
-
-        var mentor = myClass.prototype.Mentor;
+        mentor = myClass.prototype.Mentor;
 
         if (mentor && mentor.name) {
             appName = TF.Helper.Utility.getApplicationName(mentor.name);
