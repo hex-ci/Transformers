@@ -2,8 +2,8 @@
   "name": "transformers",
   "title": "Transformers",
   "description": "组件化开发模式与框架",
-  "version": "1.3.1",
-  "build": "20150312",
+  "version": "1.3.2",
+  "build": "20150914",
   "main": "dist/transformers.js",
   "homepage": "https://github.com/CodeIgniter/Transformers",
   "author": {
