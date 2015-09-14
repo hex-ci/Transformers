@@ -1,5 +1,5 @@
 /*!
- * Transformers for jQuery v1.3.1
+ * Transformers for jQuery v1.3.2
  * https://github.com/CodeIgniter/Transformers
  *
  * 为 jQuery 实现一套组件化开发模式与框架
@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-08-06
+ * Date: 2015-09-14
  */
 
  ;(function(root, factory) {
@@ -27,8 +27,8 @@
 var TF, Transformers;
 
 Transformers = TF = Transformers || {
-    'version': '1.3.1',
-    'build': '20150312'
+    'version': '1.3.2',
+    'build': '20150914'
 };
 
 
@@ -1128,30 +1128,52 @@ mix(TF.Library.ComponentLoader.prototype, {
     },
 
     load: function() {
-        this._preload();
+        this._preload(proxy(this._analyseMentor, this));
     },
 
-    _preload: function() {
+    _preload: function(callback, fullName) {
         var me = this;
+        var appName;
+        var name;
+
+        if (fullName) {
+            appName = TF.Helper.Utility.getApplicationName(fullName);
+            name = TF.Helper.Utility.getComponentName(fullName);
+        }
+        else {
+            appName = this.appName;
+            name = this.name;
+        }
 
         // Application Name 不存在则创建
-        TF.Component[this.appName] = TF.Component[this.appName] || {};
+        TF.Component[appName] = TF.Component[appName] || {};
 
-        var isLoad = (typeof TF.Component[this.appName][this.name] !== 'undefined');
+        var isLoad = (typeof TF.Component[appName][name] !== 'undefined');
+
         if (isLoad) {
-            this._createInstance();
+            if (TF.Component[appName][name].prototype.Mentor) {
+                this._preload(callback, TF.Component[appName][name].prototype.Mentor.name);
+            }
+            else {
+                callback();
+            }
         }
         else {
             $.ajax({
-                type: "GET",
-                url: TF.Helper.Utility.getComponentJsUrl(this.appName, this.name),
-                dataType: "script",
+                type: 'GET',
+                url: TF.Helper.Utility.getComponentJsUrl(appName, name),
+                dataType: 'script',
                 cache: true
             })
             .done(function(){
-                if (typeof TF.Component[me.appName][me.name] !== 'undefined') {
-                    // 加载成功
-                    me._createInstance();
+                if (typeof TF.Component[appName][name] !== 'undefined') {
+                    // 加载成功，然后分析依赖
+                    if (TF.Component[appName][name].prototype.Mentor) {
+                        me._preload(callback, TF.Component[appName][name].prototype.Mentor.name);
+                    }
+                    else {
+                        callback();
+                    }
                 }
                 else {
                     // 加载失败
@@ -1168,6 +1190,11 @@ mix(TF.Library.ComponentLoader.prototype, {
         }
     },
 
+    // 依赖分析
+    _analyseMentor: function() {
+        this._loadMentor(proxy(this._createInstance, this), TF.Component[this.appName][this.name]);
+    },
+
     // 创建当前内容的名字空间实例
     _createInstance: function() {
         try {
@@ -1180,106 +1207,52 @@ mix(TF.Library.ComponentLoader.prototype, {
             this._failure();
         }
 
-        this._funcs = [];
-        this._loadMentor(proxy(this._initInstance, this));
+        // 设置是否使用借用组件的视图
+        var mentor = this._instance.Mentor;
+        if (mentor) {
+            if (mentor.__view) {
+                this._instance.sys.viewName = mentor.__view;
+            }
+
+            if (mentor.viewData) {
+                this._instance.sys.options.data = this._instance.sys.options.data || {};
+                mix(this._instance.sys.options.data, mentor.viewData, true);
+            }
+        }
+
+        this._initInstance();
     },
 
-    // 组件依赖分析，根据依赖加载相应组件
-    // 返回组件实例
-    _loadMentor: function(callback, fullName, parentClass) {
+    _loadMentor: function(callback, myClass) {
+        var me = this;
+
         var mentor;
         var appName;
         var name;
 
-        var me = this;
+        mentor = myClass.prototype.Mentor;
 
-        if (fullName) {
-            appName = TF.Helper.Utility.getApplicationName(fullName);
-            name = TF.Helper.Utility.getComponentName(fullName);
+        if (mentor && mentor.name) {
+            appName = TF.Helper.Utility.getApplicationName(mentor.name);
+            name = TF.Helper.Utility.getComponentName(mentor.name);
 
-            // Application Name 不存在则创建
-            TF.Component[appName] = TF.Component[appName] || {};
-
-            var isLoad = (typeof TF.Component[appName][name] !== 'undefined');
-
-            if (isLoad) {
-                // 组件类已加载
-                mentor = TF.Component[appName][name].prototype.Mentor;
-                if (mentor && mentor.name) {
-                    me._loadMentor(function(){
-                        me._initMentor(fullName, parentClass, TF.Component[appName][name]);
-                        callback();
-                    }, mentor.name, TF.Component[appName][name]);
-                }
-                else {
-                    me._initMentor(fullName, parentClass, TF.Component[appName][name]);
-                    callback();
-                }
-            }
-            else {
-                // 组件类未加载
-                $.ajax({
-                    type: "GET",
-                    url: TF.Helper.Utility.getComponentJsUrl(appName, name),
-                    dataType: "script",
-                    cache: true
-                })
-                .done(function(){
-                    if (typeof TF.Component[appName][name] !== 'undefined') {
-                        // 加载成功
-                        mentor = TF.Component[appName][name].prototype.Mentor;
-                        if (mentor && mentor.name) {
-                            me._loadMentor(function(){
-                                me._initMentor(fullName, parentClass, TF.Component[appName][name]);
-                                callback();
-                            }, mentor.name, TF.Component[appName][name]);
-                        }
-                        else {
-                            me._initMentor(name, parentClass, TF.Component[appName][name]);
-                            callback();
-                        }
-                    }
-                    else {
-                        // TODO: 要抛一个异常，表示依赖加载失败，或者是触发一个加载失败的事件
-                    }
-                })
-                .fail(function( jqxhr, settings, exception ){
-                    typeof console === 'object' && console.error(exception.message);
-                    // 加载失败
-                    // 应该返回错误，或者记录日志
-                });
-            }
-
+            this._loadMentor(function(){
+                me._initMentor(myClass, TF.Component[appName][name]);
+                callback();
+            }, TF.Component[appName][name]);
         }
         else {
-            if (this._instance.Mentor) {
-                this._loadMentor(callback, this._instance.Mentor.name);
-            }
-            else {
-                callback();
-            }
+            callback();
         }
     },
 
     // 初始化继承的组件
-    _initMentor: function(fullName, componentClass, mentorClass) {
-        var dest;
-        var sourPrototype;
-        var metroPrototype = mentorClass.prototype;
-
-        componentClass = componentClass || this._instance;
-
-        if ($.isFunction(componentClass)) {
-            dest = componentClass.prototype;
-            sourPrototype = componentClass.prototype;
-        }
-        else {
-            dest = this._instance;
-            sourPrototype = TF.Component[this.appName][this.name].prototype;
-        }
+    _initMentor: function(sourClass, mentorClass) {
+        var sourPrototype = sourClass.prototype;
+        var mentorPrototype = mentorClass.prototype;
 
         // 把父类方法放入子类或当前实例
-        mix(dest, metroPrototype, function(des, src, key){
+        mix(sourPrototype, mentorPrototype, function(des, src, key){
             if (key == 'Mentor' || sourPrototype.hasOwnProperty(key)) {
                 // 如果子类重载了父类的方法，则增加一个 _super 方法到当前实例中
                 // _super 方法参考了 http://ejohn.org/blog/simple-javascript-inheritance
@@ -1290,7 +1263,7 @@ mix(TF.Library.ComponentLoader.prototype, {
 
                             // Add a new ._super() method that is the same method
                             // but on the super-class
-                            this._super = metroPrototype[name];
+                            this._super = mentorPrototype[name];
 
                             // The method only need to be bound temporarily, so we
                             // remove it when we're done executing
@@ -1310,59 +1283,31 @@ mix(TF.Library.ComponentLoader.prototype, {
             }
         });
 
-        if ($.isFunction(componentClass)) {
-            // 设置是否使用借用组件的视图
-            if (dest.Mentor.useMentorView) {
-                dest.Mentor.useMentorView = false;
-                dest.Mentor.useView = fullName;
-            }
-            else if (dest.Mentor.useView) {
-                dest.Mentor.useView = metroPrototype.Mentor.useView;
-            }
-
-            if (metroPrototype.Mentor) {
-                mix(dest.Mentor.viewData, metroPrototype.Mentor.viewData, true);
-
-                if (metroPrototype.Mentor.__path) {
-                    dest.Mentor.__path = metroPrototype.Mentor.__path;
-                }
-                else {
-                    dest.Mentor.__path = [];
-                }
+        // 设置是否使用借用组件的视图
+        if (sourPrototype.Mentor.useView) {
+            if (mentorPrototype.Mentor && mentorPrototype.Mentor.useView) {
+                sourPrototype.Mentor.__view = mentorPrototype.Mentor.__view;
             }
             else {
-                dest.Mentor.__path = [];
+                sourPrototype.Mentor.__view = sourPrototype.Mentor.name;
             }
+        }
 
-            dest.Mentor.__path.push(fullName);
+        if (mentorPrototype.Mentor) {
+            mix(sourPrototype.Mentor.viewData, mentorPrototype.Mentor.viewData, true);
+
+            if (mentorPrototype.Mentor.__path) {
+                sourPrototype.Mentor.__path = mentorPrototype.Mentor.__path;
+            }
+            else {
+                sourPrototype.Mentor.__path = [];
+            }
         }
         else {
-
-            // 设置是否使用借用组件的视图
-            if (this._instance.Mentor.useMentorView) {
-                if (metroPrototype.Mentor && metroPrototype.Mentor.useView) {
-                    this._instance.sys.viewName = metroPrototype.Mentor.useView;
-                }
-                else {
-                    this._instance.sys.viewName = fullName;
-                }
-            }
-            else if (this._instance.Mentor.useView) {
-                this._instance.sys.viewName = this._instance.Mentor.useView;
-            }
-
-            if (metroPrototype.Mentor && metroPrototype.Mentor.__path) {
-                this._instance.Mentor.__path = metroPrototype.Mentor.__path;
-                this._instance.Mentor.__path.push(fullName);
-            }
-            else {
-                this._instance.Mentor.__path = [fullName];
-            }
-
-            this._instance.sys.options.data = this._instance.sys.options.data || {};
-            mix(this._instance.sys.options.data, this._instance.Mentor.viewData, true);
+            sourPrototype.Mentor.__path = [];
         }
 
+        sourPrototype.Mentor.__path.push(sourPrototype.Mentor.name);
     },
 
     // 初始化组件实例
