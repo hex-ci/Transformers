@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-09-14
+ * Date: 2015-09-15
  */
 
  ;(function(root, factory) {
@@ -1201,6 +1201,7 @@ mix(TF.Library.ComponentLoader.prototype, {
             this._instance = new TF.Component[this.appName][this.name](this.options);
         }
         catch(e) {
+            typeof console === 'object' && console.error(e);
         }
 
         if (!this._instance) {
@@ -2348,17 +2349,17 @@ var componentSys = {
             }
         }
 
-        // 如果已经发送请求，则取消上一个请求
-        var requestName = url;
-        var currentRequester = this.sendRequester.get(requestName);
-        if (currentRequester) {
-            currentRequester.abort();
-        }
-
         // send before 钩子
         $.each(TF.Mentor._sendBefore, function(){
             this.call(me, ajaxOptions);
         });
+
+        // 如果已经发送请求，则取消上一个请求
+        var requestName = url + (ajaxOptions.data ? $.param(ajaxOptions.data) : '');
+        var currentRequester = this.sendRequester.get(requestName);
+        if (currentRequester) {
+            currentRequester.abort();
+        }
 
         ajaxOptions.context.options = ajaxOptions;
 
@@ -2378,7 +2379,7 @@ var componentSys = {
     _sendComplete: function(jqXHR) {
         var me = this.instance;
 
-        me.sys.sendRequester.erase(this.options.url);
+        me.sys.sendRequester.erase(this.options.url + (this.options.data ? $.param(this.options.data) : ''));
 
         if (this.options.loadingMsg !== false) {
             me.sys.unsetLoadingMsg();
