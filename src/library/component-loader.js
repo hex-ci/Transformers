@@ -115,6 +115,7 @@ mix(TF.Library.ComponentLoader.prototype, {
             this._instance = new TF.Component[this.appName][this.name](this.options);
         }
         catch(e) {
+            typeof console === 'object' && console.error(e);
         }
 
         if (!this._instance) {
