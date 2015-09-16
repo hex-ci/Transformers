@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-09-15
+ * Date: 2015-09-16
  */
 
  ;(function(root, factory) {
@@ -574,7 +574,7 @@ TF.Helper.Utility = {
 
     splitComponentName: function(name) {
         var result = [];
-        name.replace(/([A-Z][a-z]*)/g, function(a) {
+        name.replace(/([A-Z][a-z0-9]*)/g, function(a) {
             result.push(a.toLowerCase());
         });
         return result;
