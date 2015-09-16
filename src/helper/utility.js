@@ -157,7 +157,7 @@ TF.Helper.Utility = {
 
     splitComponentName: function(name) {
         var result = [];
-        name.replace(/([A-Z][a-z]*)/g, function(a) {
+        name.replace(/([A-Z][a-z0-9]*)/g, function(a) {
             result.push(a.toLowerCase());
         });
         return result;
