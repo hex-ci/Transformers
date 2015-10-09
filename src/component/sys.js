@@ -182,7 +182,7 @@ var componentSys = {
         var resource = this.instance.RequireResource;
         var sources;
         var counter, loaded, url;
-        var waitDone;
+        var waitDone, loadFinished;
 
         if (!resource) {
             callback();
@@ -209,6 +209,17 @@ var componentSys = {
                 };
             };
 
+            loadFinished = function(url){
+                return function(){
+                    counter++;
+                    loadedResource[url] = 'done';
+
+                    if ((counter + loaded) == sources.length) {
+                        callback();
+                    }
+                };
+            }
+
             $.each(sources, function(i, source) {
                 url = this;
 
@@ -225,16 +236,7 @@ var componentSys = {
                         url: url,
                         dataType: "script",
                         cache: true
-                    }).always(function(url){
-                        return function(){
-                            counter++;
-                            loadedResource[url] = 'done';
-
-                            if ((counter + loaded) == sources.length) {
-                                callback();
-                            }
-                        };
-                    }(url));
+                    }).always(loadFinished(url));
                 }
                 else if (loadedResource[url] == 'loading') {
                     setTimeout(waitDone(url), 50);
