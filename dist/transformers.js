@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-09-16
+ * Date: 2015-10-09
  */
 
  ;(function(root, factory) {
@@ -1569,6 +1569,7 @@ var componentSys = {
         var resource = this.instance.RequireResource;
         var sources;
         var counter, loaded, url;
+        var waitDone, loadDone;
 
         if (!resource) {
             callback();
@@ -1581,6 +1582,31 @@ var componentSys = {
             counter = 0;
             loaded = 0;
 
+            waitDone = function(url) {
+                return function() {
+                    if (loadedResource[url] == 'done') {
+                        counter++;
+                        if ((counter + loaded) == sources.length) {
+                            callback();
+                        }
+                        return;
+                    }
+
+                    setTimeout(waitDone(url), 50);
+                };
+            };
+
+            loadDone = function(url){
+                return function(){
+                    counter++;
+                    loadedResource[url] = 'done';
+
+                    if ((counter + loaded) == sources.length) {
+                        callback();
+                    }
+                };
+            };
+
             $.each(sources, function(i, source) {
                 url = this;
 
@@ -1589,19 +1615,18 @@ var componentSys = {
                 }
 
                 if (!loadedResource[url]) {
+
+                    loadedResource[url] = 'loading';
+
                     $.ajax({
                         type: "GET",
                         url: url,
                         dataType: "script",
                         cache: true
-                    }).always(function(){
-                        counter++;
-                        if ((counter + loaded) == sources.length) {
-                            callback();
-                        }
-                    });
-
-                    loadedResource[url] = true;
+                    }).always(loadDone(url));
+                }
+                else if (loadedResource[url] == 'loading') {
+                    setTimeout(waitDone(url), 50);
                 }
                 else {
                     loaded++;
