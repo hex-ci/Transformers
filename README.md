@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/CodeIgniter/Transformers.svg?branch=master)](https://travis-ci.org/CodeIgniter/Transformers)
+[![Build Status](https://travis-ci.org/hex-ci/Transformers.svg?branch=master)](https://travis-ci.org/hex-ci/Transformers)
 
 Transformers
 ============
