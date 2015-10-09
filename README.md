@@ -18,7 +18,7 @@ bower install transformers
 从 git 上克隆一个副本：
 
 ```bash
-git clone git://github.com/CodeIgniter/Transformers.git
+git clone git://github.com/hex-ci/Transformers.git
 ```
 
 进入 Transformers 目录，然后执行构建脚本：
@@ -33,8 +33,8 @@ cd Transformers && npm run build
 文档
 ------------
 
-* [快速开始](https://github.com/CodeIgniter/Transformers/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B)
-* [目录](https://github.com/CodeIgniter/Transformers/wiki/%E7%9B%AE%E5%BD%95)
+* [快速开始](https://github.com/hex-ci/Transformers/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B)
+* [目录](https://github.com/hex-ci/Transformers/wiki/%E7%9B%AE%E5%BD%95)
 
 演示站点
 ------------
