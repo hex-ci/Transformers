@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2015-10-09
+ * Date: 2016-04-22
  */
 
  ;(function(root, factory) {
@@ -1540,7 +1540,7 @@ var componentSys = {
             }
             else if (me.options.contentEl) {
                 //直接渲染
-                me._loadComplete($(me.options.contentEl).clone());
+                me._loadComplete($('<div></div>').html($(me.options.contentEl).html()));
             }
             else {
                 me._loadContent();
