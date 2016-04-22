@@ -1,5 +1,5 @@
 /*!
- * Transformers for jQuery v1.3.2
+ * Transformers for jQuery v1.3.3
  * https://github.com/CodeIgniter/Transformers
  *
  * 为 jQuery 实现一套组件化开发模式与框架
@@ -27,8 +27,8 @@
 var TF, Transformers;
 
 Transformers = TF = Transformers || {
-    'version': '1.3.2',
-    'build': '20150914'
+    'version': '1.3.3',
+    'build': '20160422'
 };
 
 
