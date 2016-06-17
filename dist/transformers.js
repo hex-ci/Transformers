@@ -1,5 +1,5 @@
 /*!
- * Transformers for jQuery v1.3.3
+ * Transformers for jQuery v1.3.4
  * https://github.com/CodeIgniter/Transformers
  *
  * 为 jQuery 实现一套组件化开发模式与框架
@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2016-04-22
+ * Date: 2016-06-17
  */
 
  ;(function(root, factory) {
@@ -27,8 +27,8 @@
 var TF, Transformers;
 
 Transformers = TF = Transformers || {
-    'version': '1.3.3',
-    'build': '20160422'
+    'version': '1.3.4',
+    'build': '20160617'
 };
 
 
@@ -1540,7 +1540,7 @@ var componentSys = {
             }
             else if (me.options.contentEl) {
                 //直接渲染
-                me._loadComplete($('<div></div>').html($(me.options.contentEl).html()));
+                me._loadComplete($('<div class="TFComponent"></div>').html($(me.options.contentEl).html()));
             }
             else {
                 me._loadContent();

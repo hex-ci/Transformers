@@ -153,7 +153,7 @@ var componentSys = {
             }
             else if (me.options.contentEl) {
                 //直接渲染
-                me._loadComplete($('<div></div>').html($(me.options.contentEl).html()));
+                me._loadComplete($('<div class="TFComponent"></div>').html($(me.options.contentEl).html()));
             }
             else {
                 me._loadContent();
