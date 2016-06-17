@@ -1,6 +1,6 @@
 /*!
  * Transformers for jQuery v@VERSION
- * https://github.com/CodeIgniter/Transformers
+ * https://github.com/hex-ci/Transformers
  *
  * 为 jQuery 实现一套组件化开发模式与框架
  *
@@ -10,7 +10,7 @@
  * Date: @DATE
  */
 
- ;(function(root, factory) {
+;(function(root, factory) {
     if (typeof exports === 'object') {
         module.exports = factory();
     }
