@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/hex-ci/Transformers.svg?branch=master)](https://travis-ci.org/hex-ci/Transformers)
+[![CircleCI](https://circleci.com/gh/hex-ci/Transformers.svg?style=svg)](https://circleci.com/gh/hex-ci/Transformers)
 
 Transformers
 ============
