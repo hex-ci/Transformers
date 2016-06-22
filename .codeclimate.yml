@@ -22,5 +22,9 @@ ratings:
   - "**.py"
   - "**.rb"
 exclude_paths:
-- dist/
 - test/
+- demo/
+- "Gruntfile.js"
+- "src/intro.js"
+- "src/outro.js"
+- "dist/*.min.js"
