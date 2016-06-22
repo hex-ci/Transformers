@@ -317,11 +317,11 @@ TF.Helper.Utility = {
                             if (tag.isEnd) {
                                 if (N < 0) {throw new Error("Unexpected Tag: " + a); }
                                 stat = NStat[N--];
-                                if (stat.tagG != tag.tagG) {throw new Error("Unmatch Tags: " + stat.tagG + "--" + tagName); }
+                                if (stat.tagG !== tag.tagG) {throw new Error("Unmatch Tags: " + stat.tagG + "--" + tagName); }
                             } else if (!tag.isBgn) {
                                 if (N < 0) {throw new Error("Unexpected Tag:" + a); }
                                 stat = NStat[N];
-                                if (stat.tagG != tag.tagG) {throw new Error("Unmatch Tags: " + stat.tagG + "--" + tagName); }
+                                if (stat.tagG !== tag.tagG) {throw new Error("Unmatch Tags: " + stat.tagG + "--" + tagName); }
                                 if (tag.cond && !(tag.cond & stat.rlt)) {throw new Error("Unexpected Tag: " + tagName); }
                                 stat.rlt = tag.rlt;
                             }
