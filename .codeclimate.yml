@@ -8,9 +8,9 @@ engines:
       languages:
       - javascript
 exclude_paths:
-- demo/**
-- dist/**
-- test/**
-- Gruntfile.js
-- src/intro.js
-- src/outro.js
+  - demo/**
+  - dist/**
+  - test/**
+  - Gruntfile.js
+  - src/intro.js
+  - src/outro.js
