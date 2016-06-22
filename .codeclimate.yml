@@ -7,11 +7,9 @@ engines:
     config:
       languages:
       - javascript
-languages:
-  JavaScript: true
 exclude_paths:
 - "demo/**"
-- "dist/**"
+- "dist/*.min.js"
 - "test/**"
 - "Gruntfile.js"
 - "src/intro.js"
