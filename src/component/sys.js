@@ -172,6 +172,8 @@ var componentSys = {
             this.loader.data = data;
         }
 
+        this.refreshing = true;
+
         if (this.options.applyTo) {
             //直接渲染
             this._loadComplete($(this.options.applyTo));
@@ -181,7 +183,6 @@ var componentSys = {
             this._loadComplete($('<div class="TFComponent"></div>').html($(this.options.contentEl).html()));
         }
         else {
-            this.refreshing = true;
             this._loadContent();
         }
     },
