@@ -172,8 +172,18 @@ var componentSys = {
             this.loader.data = data;
         }
 
-        this.refreshing = true;
-        this._loadContent();
+        if (this.options.applyTo) {
+            //直接渲染
+            this._loadComplete($(this.options.applyTo));
+        }
+        else if (this.options.contentEl) {
+            //直接渲染
+            this._loadComplete($('<div class="TFComponent"></div>').html($(this.options.contentEl).html()));
+        }
+        else {
+            this.refreshing = true;
+            this._loadContent();
+        }
     },
 
     // 装载资源文件

@@ -1,5 +1,5 @@
 /*!
- * Transformers for jQuery v1.3.4
+ * Transformers for jQuery v1.3.5
  * https://github.com/hex-ci/Transformers
  *
  * 为 jQuery 实现一套组件化开发模式与框架
@@ -7,7 +7,7 @@
  * Copyright Hex and other contributors
  * Released under the MIT license
  *
- * Date: 2016-06-17
+ * Date: 2016-06-30
  */
 
 ;(function(root, factory) {
@@ -27,8 +27,8 @@
 var TF, Transformers;
 
 Transformers = TF = Transformers || {
-    'version': '1.3.4',
-    'build': '20160617'
+    'version': '1.3.5',
+    'build': '20160630'
 };
 
 
@@ -734,11 +734,11 @@ TF.Helper.Utility = {
                             if (tag.isEnd) {
                                 if (N < 0) {throw new Error("Unexpected Tag: " + a); }
                                 stat = NStat[N--];
-                                if (stat.tagG != tag.tagG) {throw new Error("Unmatch Tags: " + stat.tagG + "--" + tagName); }
+                                if (stat.tagG !== tag.tagG) {throw new Error("Unmatch Tags: " + stat.tagG + "--" + tagName); }
                             } else if (!tag.isBgn) {
                                 if (N < 0) {throw new Error("Unexpected Tag:" + a); }
                                 stat = NStat[N];
-                                if (stat.tagG != tag.tagG) {throw new Error("Unmatch Tags: " + stat.tagG + "--" + tagName); }
+                                if (stat.tagG !== tag.tagG) {throw new Error("Unmatch Tags: " + stat.tagG + "--" + tagName); }
                                 if (tag.cond && !(tag.cond & stat.rlt)) {throw new Error("Unexpected Tag: " + tagName); }
                                 stat.rlt = tag.rlt;
                             }
@@ -1559,8 +1559,18 @@ var componentSys = {
             this.loader.data = data;
         }
 
-        this.refreshing = true;
-        this._loadContent();
+        if (this.options.applyTo) {
+            //直接渲染
+            this._loadComplete($(this.options.applyTo));
+        }
+        else if (this.options.contentEl) {
+            //直接渲染
+            this._loadComplete($('<div class="TFComponent"></div>').html($(this.options.contentEl).html()));
+        }
+        else {
+            this.refreshing = true;
+            this._loadContent();
+        }
     },
 
     // 装载资源文件
