@@ -5,3 +5,10 @@ script:
     - "npm run build"
 
 sudo: false
+
+git:
+  depth: 10
+
+branches:
+  only:
+    - master
