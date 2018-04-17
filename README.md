@@ -41,5 +41,3 @@ cd Transformers && npm run build
 ------------
 
 http://iqwer.demo-domain.cn/  User: `demo@demo-domain.cn` Pass: `123456`
-
-(注：服务器在美国，国内访问较慢，请见谅）
